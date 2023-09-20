@@ -150,6 +150,7 @@ def validate(model, val_loader, criterion):
     target_list = []
     pred_score_list = []
     target_score_list = []
+    i=0
     with torch.no_grad():
         for datas in tqdm.tqdm(val_loader):
             data, target = datas["image"].to(device), datas["annotations"].to(device).squeeze(2)
@@ -159,7 +160,9 @@ def validate(model, val_loader, criterion):
             target_list.append(torch.argmax(target, dim=1))
             pred_score_list.append(dis_2_score(output).tolist())
             target_score_list.append(dis_2_score(target).tolist())
-            break
+            i+=1
+            if i==10:
+                break
         val_loss = sum(val_loss) / len(val_loss)
         print(pred_score_list)
         print(target_score_list)
