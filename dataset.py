@@ -16,6 +16,22 @@ from torch.utils import data
 import torchvision.transforms as transforms
 
 
+train_transform = transforms.Compose([
+        transforms.Resize(256),
+        transforms.RandomCrop(224),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225])])
+
+val_transform = transforms.Compose([
+    transforms.Resize(256),
+    transforms.RandomCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406],
+        std=[0.229, 0.224, 0.225])])
+
+
 class AVADataset(data.Dataset):
     """AVA dataset
 
@@ -49,10 +65,10 @@ class AVADataset(data.Dataset):
 if __name__ == '__main__':
 
     # sanity check
-    root = './data/images'
-    csv_file = './data/train_labels.csv'
+    root = './dataset/images'
+    csv_file = './dataset/labels/train_labels.csv'
     train_transform = transforms.Compose([
-        transforms.Scale(256),
+        transforms.Resize(256),
         transforms.RandomCrop(224),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
