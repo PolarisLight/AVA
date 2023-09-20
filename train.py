@@ -123,6 +123,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
                 ))
                 if opt["use_wandb"]:
                     wandb.log({"loss": loss, "epoch": epoch})
+                break
 
         val_loss = validate(model, val_loader, criterion)
 
