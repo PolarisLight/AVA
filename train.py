@@ -105,6 +105,8 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
                 data, target = datas["image"].to(device), datas["annotations"].to(device)
                 optimizer.zero_grad()
                 output = model(data)
+                print(output.shape)
+                print(target.shape)
                 loss = criterion(output, target)
                 if not opt["use_wandb"]:
                     print()
