@@ -13,8 +13,8 @@ from sklearn.metrics import accuracy_score
 import tqdm
 import wandb  # wandb is a tool for visualizing the training process, please refer to https://wandb.ai/site
 
-from dataset import AVADataset,train_transform,val_transform
-from utils import EMD_loss,dis_2_score
+from dataset import AVADataset, train_transform, val_transform
+from utils import EMD_loss, dis_2_score
 
 # this is for solving the problem of "OMP: Error #15: Initializing libiomp5.dylib,
 # but found libiomp5.dylib already initialized."
@@ -24,7 +24,7 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 arg = argparse.ArgumentParser()
-arg.add_argument("-n", "--task_name", required=False,default="AVA", help="task name")
+arg.add_argument("-n", "--task_name", required=False, default="AVA", help="task name")
 arg.add_argument("-b", "--batch_size", required=False, default=64, help="batch size")
 arg.add_argument("-e", "--epochs", required=False, default=20, help="epochs")
 arg.add_argument("-lr", "--learning_rate", required=False, type=float, default=1e-3, help="learning rate")
@@ -150,7 +150,7 @@ def validate(model, val_loader, criterion):
     target_list = []
     pred_score_list = []
     target_score_list = []
-    i=0
+    i = 0
     with torch.no_grad():
         for datas in tqdm.tqdm(val_loader):
             data, target = datas["image"].to(device), datas["annotations"].to(device).squeeze(2)
@@ -158,10 +158,10 @@ def validate(model, val_loader, criterion):
             val_loss.append(criterion(output, target).item())
             pred_list.append(torch.argmax(output, dim=1))
             target_list.append(torch.argmax(target, dim=1))
-            pred_score_list.append(dis_2_score(output).tolist())
-            target_score_list.append(dis_2_score(target).tolist())
-            i+=1
-            if i==10:
+            pred_score_list += dis_2_score(output).tolist()
+            target_score_list += dis_2_score(target).tolist()
+            i += 1
+            if i == 10:
                 break
         val_loss = sum(val_loss) / len(val_loss)
         print(pred_score_list)
@@ -182,12 +182,9 @@ def validate(model, val_loader, criterion):
 
         if opt["use_wandb"]:
             wandb.log({"val_loss": val_loss, "val_emd": emd, "val_pearson": pearson, "val_spearman": spearman,
-                          "val_acc": acc})
+                       "val_acc": acc})
 
         print(f"val_loss:{val_loss}, val_emd:{emd}, val_pearson:{pearson}, val_spearman:{spearman}, val_acc:{acc}")
-
-
-
 
     return val_loss
 
