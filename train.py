@@ -24,23 +24,18 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 arg = argparse.ArgumentParser()
+arg.add_argument("-n", "--task_name", required=False,default="AVA", help="task name")
 arg.add_argument("-b", "--batch_size", required=False, default=64, help="batch size")
 arg.add_argument("-e", "--epochs", required=False, default=20, help="epochs")
 arg.add_argument("-lr", "--learning_rate", required=False, type=float, default=1e-3, help="learning rate")
 arg.add_argument("-m", "--model_saved_path", required=False, default="saved_models", help="model saved path")
-arg.add_argument("-d", "--image_dir", required=False, default="images/head_finished", help="image dir")
-arg.add_argument("-c", "--csv_dir", required=False, default="images/head_dataset", help="csv dir")
-arg.add_argument("-t", "--train_csv", required=False, default="train.csv", help="train csv")
-arg.add_argument("-v", "--val_csv", required=False, default="val.csv", help="val csv")
+arg.add_argument("-d", "--image_dir", required=False, default="dataset/images", help="image dir")
+arg.add_argument("-c", "--csv_dir", required=False, default="dataset/labels", help="csv dir")
+arg.add_argument("-t", "--train_csv", required=False, default="train_labels.csv", help="train csv")
+arg.add_argument("-v", "--val_csv", required=False, default="val_labels.csv", help="val csv")
 arg.add_argument("-p", "--with_pretrained", required=False, default=True, help="with pretrained model or not")
-arg.add_argument("-pp", "--pretrained_path", required=False, default="saved_models/VGG_NW_newACC_1/epoch_9.pth",
-                 help="pretrained model path")
 arg.add_argument("-s", "--image_size", required=False, default=(224, 224), help="image size")
 arg.add_argument("-w", "--use_wandb", required=False, type=int, default=1, help="use wandb or not")
-arg.add_argument("-norm", "--use_img_norm", required=False, type=bool, default=False,
-                 help="use image normalization or not")
-arg.add_argument("-r", "--keep_ratio", required=False, type=bool, default=False,
-                 help="keep image ratio or not")
 
 opt = vars(arg.parse_args())
 
