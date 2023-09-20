@@ -123,7 +123,6 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
                 ))
                 if opt["use_wandb"]:
                     wandb.log({"loss": loss, "epoch": epoch})
-                break
 
         val_loss = validate(model, val_loader, criterion)
 
@@ -150,22 +149,18 @@ def validate(model, val_loader, criterion):
     target_list = []
     pred_score_list = []
     target_score_list = []
-    i = 0
+
     with torch.no_grad():
         for datas in tqdm.tqdm(val_loader):
             data, target = datas["image"].to(device), datas["annotations"].to(device).squeeze(2)
             output = model(data)
             val_loss.append(criterion(output, target).item())
-            pred_list.append(torch.argmax(output, dim=1))
-            target_list.append(torch.argmax(target, dim=1))
+            pred_list.append(output)
+            target_list.append(target)
             pred_score_list += dis_2_score(output).tolist()
             target_score_list += dis_2_score(target).tolist()
-            i += 1
-            if i == 2:
-                break
+
         val_loss = sum(val_loss) / len(val_loss)
-        print(pred_score_list)
-        print(target_score_list)
         pred = torch.cat(pred_list, dim=0)
         target = torch.cat(target_list, dim=0)
         emd = EMD_loss(pred, target)
