@@ -31,7 +31,7 @@ arg.add_argument("-lr", "--learning_rate", required=False, type=float, default=1
 arg.add_argument("-m", "--model_saved_path", required=False, default="saved_models", help="model saved path")
 arg.add_argument("-d", "--image_dir", required=False, default="dataset/images", help="image dir")
 arg.add_argument("-c", "--csv_dir", required=False, default="dataset/labels", help="csv dir")
-arg.add_argument("-t", "--train_csv", required=False, default="train_labels.csv", help="train csv")
+arg.add_argument("-t", "--train_csv", required=False, default="test_labels.csv", help="train csv")
 arg.add_argument("-v", "--val_csv", required=False, default="val_labels.csv", help="val csv")
 arg.add_argument("-p", "--with_pretrained", required=False, default=True, help="with pretrained model or not")
 arg.add_argument("-s", "--image_size", required=False, default=(224, 224), help="image size")
@@ -102,11 +102,9 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
         model.train()
         with tqdm.tqdm(train_loader, unit='batch') as pbar:
             for batch_idx, datas in enumerate(train_loader):
-                data, target = datas["image"].to(device), datas["annotations"].to(device)
+                data, target = datas["image"].to(device), datas["annotations"].to(device).squeeze(2)
                 optimizer.zero_grad()
                 output = model(data)
-                print(output.shape)
-                print(target.shape)
                 loss = criterion(output, target)
                 if not opt["use_wandb"]:
                     print()
@@ -153,7 +151,7 @@ def validate(model, val_loader, criterion):
     target_score_list = []
     with torch.no_grad():
         for datas in tqdm.tqdm(val_loader):
-            data, target = datas["image"].to(device), datas["annotations"].to(device)
+            data, target = datas["image"].to(device), datas["annotations"].to(device).squeeze(2)
             output = model(data)
             val_loss.append(criterion(output, target).item())
             pred_list.append(torch.argmax(output, dim=1))
