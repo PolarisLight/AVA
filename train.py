@@ -101,8 +101,8 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
             wandb.log({"lr": optimizer.param_groups[0]['lr']})
         model.train()
         with tqdm.tqdm(train_loader, unit='batch') as pbar:
-            for batch_idx, (data, target) in enumerate(train_loader):
-                data, target = data.to(device), target.to(device)
+            for batch_idx, datas in enumerate(train_loader):
+                data, target = datas["image"].to(device), datas["annotations"].to(device)
                 optimizer.zero_grad()
                 output = model(data)
                 loss = criterion(output, target)
@@ -150,8 +150,8 @@ def validate(model, val_loader, criterion):
     pred_score_list = []
     target_score_list = []
     with torch.no_grad():
-        for data, target in tqdm.tqdm(val_loader):
-            data, target = data.to(device), target.to(device)
+        for datas in tqdm.tqdm(val_loader):
+            data, target = datas["image"].to(device), datas["annotations"].to(device)
             output = model(data)
             val_loss.append(criterion(output, target).item())
             pred_list.append(torch.argmax(output, dim=1))
