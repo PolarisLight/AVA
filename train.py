@@ -161,7 +161,7 @@ def validate(model, val_loader, criterion):
             pred_score_list += dis_2_score(output).tolist()
             target_score_list += dis_2_score(target).tolist()
             i += 1
-            if i == 10:
+            if i == 2:
                 break
         val_loss = sum(val_loss) / len(val_loss)
         print(pred_score_list)
@@ -174,6 +174,9 @@ def validate(model, val_loader, criterion):
         pearson = pearsonr(pred_score_list, target_score_list)[0]
         # 计算斯皮尔曼相关系数
         spearman = spearmanr(pred_score_list, target_score_list)[0]
+
+        pred_score_list = np.array(pred_score_list)
+        target_score_list = np.array(target_score_list)
 
         pred_label = np.where(pred_score_list <= 5.00, 0, 1)
         target_label = np.where(target_score_list <= 5.00, 0, 1)
