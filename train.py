@@ -163,7 +163,7 @@ def validate(model, val_loader, criterion):
         val_loss = sum(val_loss) / len(val_loss)
         pred = torch.cat(pred_list, dim=0)
         target = torch.cat(target_list, dim=0)
-        emd = EMD_loss(pred, target)
+        # emd = EMD_loss(pred, target)
 
         # 计算皮尔逊相关系数
         pearson = pearsonr(pred_score_list, target_score_list)[0]
@@ -179,10 +179,10 @@ def validate(model, val_loader, criterion):
         acc = accuracy_score(target_label, pred_label)
 
         if opt["use_wandb"]:
-            wandb.log({"val_loss": val_loss, "val_emd": emd, "val_pearson": pearson, "val_spearman": spearman,
+            wandb.log({"val_loss": val_loss, "val_pearson": pearson, "val_spearman": spearman,
                        "val_acc": acc})
 
-        print(f"val_loss:{val_loss}, val_emd:{emd}, val_pearson:{pearson}, val_spearman:{spearman}, val_acc:{acc}")
+        print(f"val_loss:{val_loss}, val_pearson:{pearson}, val_spearman:{spearman}, val_acc:{acc}")
 
     return val_loss
 
