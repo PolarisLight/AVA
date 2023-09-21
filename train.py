@@ -205,12 +205,16 @@ def main():
 
     model = torchvision.models.resnet50(pretrained=opt["with_pretrained"])
     model.fc = nn.Sequential(
-        nn.Dropout(0.5),
-        nn.Linear(model.fc.in_features, 10),
+        nn.Dropout(0.2),
+        nn.Linear(model.fc.in_features, 512),
+        nn.ReLU(inplace=True),
+        nn.Dropout(0.2),
+        nn.Linear(512, 10),
+        nn.Softmax(dim=1)
     )
     model.to(device)
 
-    criterion = nn.CrossEntropyLoss()  # it can be replaced by other loss function
+    criterion = EMD_loss()  # it can be replaced by other loss function
     optimizer = optim.Adam(model.parameters(), lr=opt["learning_rate"])
 
     # you can use wandb to log your training process

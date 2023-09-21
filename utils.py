@@ -18,21 +18,28 @@ def EMD(pred, gt):
     gt = np.cumsum(gt)
     return np.sum(np.abs(pred - gt))
 
-def EMD_loss(pred, gt):
+class EMD_loss(torch.nn.Module):
     """
-    Earth Mover's Distance
-    :param pred: prediction
-    :param gt: ground truth
-    :return: EMD loss
+    EMD loss
     """
-    pred = pred.cpu().numpy()
-    gt = gt.cpu().numpy()
-    assert pred.shape == gt.shape
-    batch_size = pred.shape[0]
-    loss = 0
-    for i in range(batch_size):
-        loss += EMD(pred[i], gt[i])
-    return loss / batch_size
+    def __init__(self):
+        super(EMD_loss, self).__init__()
+
+    def forward(self, pred, gt):
+        """
+        forward
+        :param pred: prediction
+        :param gt: ground truth
+        :return: EMD loss
+        """
+        assert pred.shape == gt.shape
+        pred = pred.flatten()
+        gt = gt.flatten()
+        pred = pred / torch.sum(pred)
+        gt = gt / torch.sum(gt)
+        pred = torch.cumsum(pred, dim=0)
+        gt = torch.cumsum(gt, dim=0)
+        return torch.sum(torch.abs(pred - gt))
 
 def dis_2_score(dis):
     """
@@ -47,3 +54,4 @@ def dis_2_score(dis):
 
     score = (dis * w_batch).sum(axis=1)
     return score
+
