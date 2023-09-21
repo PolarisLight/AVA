@@ -24,8 +24,8 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 arg = argparse.ArgumentParser()
-arg.add_argument("-n", "--task_name", required=False, default="AVA", help="task name")
-arg.add_argument("-b", "--batch_size", required=False, default=128, help="batch size")
+arg.add_argument("-n", "--task_name", required=False, default="AVA", type=str, help="task name")
+arg.add_argument("-b", "--batch_size", required=False, default=128, type=int, help="batch size")
 arg.add_argument("-e", "--epochs", required=False, default=20, help="epochs")
 arg.add_argument("-lr", "--learning_rate", required=False, type=float, default=1e-3, help="learning rate")
 arg.add_argument("-m", "--model_saved_path", required=False, default="saved_models", help="model saved path")
