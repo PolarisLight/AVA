@@ -108,11 +108,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
                 loss = criterion(output, target)
                 if opt["use_wandb"]:
                     print()
-                    print("0:output:%.3f, target:%.3f" % (output[0].item(), target[0].item()))
-                    print("1:output:%.3f, target:%.3f" % (output[1].item(), target[1].item()))
-                    print("2:output:%.3f, target:%.3f" % (output[2].item(), target[2].item()))
-                    print("3:output:%.3f, target:%.3f" % (output[3].item(), target[3].item()))
-                    print("4:output:%.3f, target:%.3f" % (output[4].item(), target[4].item()))
+                    print(f"0:output:{output[0].item()}, \ntarget:{target[0].item()}")
                 loss.backward()
 
                 optimizer.step()
