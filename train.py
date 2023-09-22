@@ -106,7 +106,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
                 optimizer.zero_grad()
                 output = model(data)
                 loss = criterion(output, target)
-                if not opt["use_wandb"]:
+                if opt["use_wandb"]:
                     print()
                     print("0:output:%.3f, target:%.3f" % (output[0].item(), target[0].item()))
                     print("1:output:%.3f, target:%.3f" % (output[1].item(), target[1].item()))

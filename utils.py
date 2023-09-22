@@ -55,3 +55,19 @@ def dis_2_score(dis):
     score = (dis * w_batch).sum(axis=1)
     return score
 
+class MAELoss(torch.nn.Module):
+    """
+    MAE loss
+    """
+    def __init__(self):
+        super(MAELoss, self).__init__()
+
+    def forward(self, pred, gt):
+        """
+        forward
+        :param pred: prediction
+        :param gt: ground truth
+        :return: MAE loss
+        """
+        assert pred.shape == gt.shape
+        return torch.mean(torch.abs(pred - gt))
