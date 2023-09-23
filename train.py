@@ -108,7 +108,8 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
                 loss = criterion(output, target)
                 if opt["use_wandb"]:
                     print()
-                    print(f"0:output:{output[0]}, \ntarget:{target[0]}")
+                    print(f"0:output:{output[0].detach().cpu().numpy()}, "
+                          f"\ntarget:{target[0].detach().cpu().numpy()}")
                 loss.backward()
 
                 optimizer.step()
@@ -206,7 +207,7 @@ def main():
         nn.ReLU(inplace=True),
         nn.Dropout(0.2),
         nn.Linear(512, 10),
-        nn.Softmax(dim=1)
+        nn.ReLU(inplace=True),
     )
     model.to(device)
 
