@@ -25,21 +25,16 @@ class EMD_loss(torch.nn.Module):
     def __init__(self):
         super(EMD_loss, self).__init__()
 
-    def forward(self, pred, gt):
-        """
-        forward
-        :param pred: prediction
-        :param gt: ground truth
-        :return: EMD loss
-        """
-        assert pred.shape == gt.shape
-        pred = pred.flatten()
-        gt = gt.flatten()
-        pred = pred / torch.sum(pred)
-        gt = gt / torch.sum(gt)
-        pred = torch.cumsum(pred, dim=0)
-        gt = torch.cumsum(gt, dim=0)
-        return torch.sum(torch.abs(pred - gt))
+    def forward(self, p_estimate, p_target):
+        assert p_target.shape == p_estimate.shape
+        cdf_target = torch.cumsum(p_target, dim=1)
+        cdf_estimate = torch.cumsum(p_estimate, dim=1)
+
+        cdf_diff = cdf_estimate - cdf_target
+        # samplewise_emd = torch.sqrt(torch.mean(torch.pow(torch.abs(cdf_diff), 2)))  # train
+        samplewise_emd = torch.mean(torch.pow(torch.abs(cdf_diff), 1)) # test
+
+        return samplewise_emd.mean()
 
 def dis_2_score(dis):
     """

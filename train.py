@@ -207,7 +207,7 @@ def main():
         nn.ReLU(inplace=True),
         nn.Dropout(0.2),
         nn.Linear(512, 10),
-        nn.ReLU(inplace=True),
+        nn.Softmax(dim=1)
     )
     model.to(device)
 
