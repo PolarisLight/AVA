@@ -36,7 +36,7 @@ print(f'everything prompt time: {time.time() - tic}')
 
 for mask in masks:
     mask["segmentation"] = mask["segmentation"].tolist()
-with open("output/" + img_name + ".json", "w") as f:
+with open(img_name + ".json", "w") as f:
     json.dump(masks, f)
 # plt.figure(figsize=(20, 20))
 # plt.imshow(img)
