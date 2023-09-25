@@ -29,7 +29,7 @@ def get_img_masks(img_name):
     return
 
 def process_images_with_threadpool(img_files):
-    with ThreadPoolExecutor(max_workers=4) as executor:  # 根据需要设置最大线程数
+    with ThreadPoolExecutor(max_workers=16) as executor:  # 根据需要设置最大线程数
         futures = {executor.submit(get_img_masks, img_name): img_name for img_name in img_files}
         pbar = tqdm.tqdm(total=len(futures))
         for future in concurrent.futures.as_completed(futures):
@@ -47,6 +47,5 @@ sam.to(device)
 
 if __name__ == "__main__":
     img_files = glob.glob("dataset/images/*.jpg")
-    print(img_files)
 
     process_images_with_threadpool(img_files)
