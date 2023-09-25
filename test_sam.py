@@ -4,6 +4,7 @@ import numpy as np
 import cv2
 import time
 import json
+import torch
 
 
 def show_anns(anns):
@@ -28,7 +29,7 @@ img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 print(img.shape)
 
 sam = sam_model_registry["default"](checkpoint="sam_vit_h_4b8939.pth")
-device = "mps"
+device = "cuda" if torch.cuda.is_available() else "cpu"
 sam.to(device)
 mask_generator = SamAutomaticMaskGenerator(sam, min_mask_region_area=50)
 tic = time.time()
