@@ -17,19 +17,21 @@ import torchvision.transforms as transforms
 
 
 train_transform = transforms.Compose([
-        transforms.Resize(256),
-        transforms.RandomCrop(224),
+        transforms.Resize(512),
+        transforms.RandomCrop(448),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225])])
+        # transforms.Normalize(mean=[0.485, 0.456, 0.406],
+        #     std=[0.229, 0.224, 0.225])
+])
 
 val_transform = transforms.Compose([
-    transforms.Resize(256),
-    transforms.RandomCrop(224),
+    transforms.Resize((512,512)),
+    transforms.RandomCrop(448),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406],
-        std=[0.229, 0.224, 0.225])])
+        std=[0.229, 0.224, 0.225])
+])
 
 
 class AVADataset(data.Dataset):
@@ -58,6 +60,7 @@ class AVADataset(data.Dataset):
 
         if self.transform:
             sample['image'] = self.transform(sample['image'])
+            # print(sample['image'].shape)
 
         return sample
 
