@@ -9,20 +9,27 @@ import glob
 from dataset import AVADataset, train_transform, val_transform
 from torch.utils.data import DataLoader
 import tqdm
+import argparse
 
 img_files = glob.glob("dataset/images/*.jpg")
 
 # default sam_vit_h_4b8939
 # vit_b sam_vit_b_01ec64
-sam = sam_model_registry["default"](checkpoint="sam_vit_h_4b8939.pth")
+sam = sam_model_registry["vit_b"](checkpoint="sam_vit_b_01ec64.pth")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 sam.to(device)
 for layer in sam.image_encoder.children():
     print(layer)
 
+argparser = argparse.ArgumentParser()
+argparser.add_argument("-bs", "--batch_size", required=False, default=16, type=int, help="batch size")
+
+
 image_dir = "dataset/images"
 train_csv = "dataset/labels/train_labels.csv"
+
+
 
 dataset = AVADataset(csv_file=train_csv, root_dir=image_dir, transform=train_transform)
 train_loader = DataLoader(dataset, batch_size=32, shuffle=True)
