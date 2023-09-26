@@ -28,7 +28,7 @@ dataset = AVADataset(csv_file=train_csv, root_dir=image_dir, transform=train_tra
 train_loader = DataLoader(dataset, batch_size=32, shuffle=True)
 
 for i, data in tqdm.tqdm(enumerate(train_loader)):
-    img, label = data["image"], data["annotations"]
+    img, label = data["image"].to(device), data["annotations"].to(device)
     print(img.shape)
 
     tic = time.time()
