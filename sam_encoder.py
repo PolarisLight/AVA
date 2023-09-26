@@ -17,6 +17,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 sam.to(device)
 for layer in sam.image_encoder.children():
     print(layer)
+
 for img_name in img_files:
     img = cv2.imread(img_name)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -25,6 +26,7 @@ for img_name in img_files:
     print(img.shape)
 
     tic = time.time()
-    embeddings = sam.image_encoder(img)
+    with torch.no_grad():
+        embeddings = sam.image_encoder(img)
     print(f'generate time: {time.time() - tic}')
     print(embeddings.shape)
