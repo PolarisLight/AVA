@@ -65,7 +65,7 @@ class AVADataset(data.Dataset):
         image = image.resize((self.imgsz, self.imgsz))
         if self.mask:
             mask = self.FASTSAM(image, device=self.device, retina_masks=True,
-                                imgsz=512, conf=0.2, iou=0.9, verbose=False)[0].masks.data.cpu()
+                                imgsz=self.imgsz, conf=0.2, iou=0.9, verbose=False)[0].masks.data.cpu()
 
             mask_sum = mask.view(mask.shape[0], -1).sum(dim=1)
 

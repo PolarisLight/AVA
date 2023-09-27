@@ -36,6 +36,7 @@ arg.add_argument("-t", "--train_csv", required=False, default="train_labels.csv"
 arg.add_argument("-v", "--val_csv", required=False, default="val_labels.csv", help="val csv")
 arg.add_argument("-s", "--image_size", required=False, default=(224, 224), help="image size")
 arg.add_argument("-w", "--use_wandb", required=False, type=int, default=1, help="use wandb or not")
+arg.add_argument("-nw","--num_workers",required=False,type=int,default=0,help="num_workers")
 
 opt = vars(arg.parse_args())
 
@@ -193,8 +194,8 @@ def main():
     train_dataset = AVADataset(csv_file=train_csv, root_dir=image_dir, transform=train_transform,mask_num=30)
     val_dataset = AVADataset(csv_file=val_csv, root_dir=image_dir, transform=val_transform,mask_num=30)
 
-    train_loader = DataLoader(train_dataset, batch_size=opt["batch_size"], shuffle=True, num_workers=4)
-    val_loader = DataLoader(val_dataset, batch_size=opt["batch_size"], shuffle=False, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=opt["batch_size"], shuffle=True,num_workers=opt["num_workers"])
+    val_loader = DataLoader(val_dataset, batch_size=opt["batch_size"], shuffle=False,num_workers=opt["num_workers"])
 
     model = AAM(mask_num=30,feat_num=64)
     model.to(device)
