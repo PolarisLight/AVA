@@ -15,6 +15,7 @@ import wandb  # wandb is a tool for visualizing the training process, please ref
 
 from dataset import AVADataset, train_transform, val_transform
 from utils import EMD_loss, dis_2_score
+from AAM import AAM
 
 # this is for solving the problem of "OMP: Error #15: Initializing libiomp5.dylib,
 # but found libiomp5.dylib already initialized."
@@ -24,8 +25,8 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 arg = argparse.ArgumentParser()
-arg.add_argument("-n", "--task_name", required=False, default="AVA", type=str, help="task name")
-arg.add_argument("-b", "--batch_size", required=False, default=128, type=int, help="batch size")
+arg.add_argument("-n", "--task_name", required=False, default="AAM", type=str, help="task name")
+arg.add_argument("-b", "--batch_size", required=False, default=32, type=int, help="batch size")
 arg.add_argument("-e", "--epochs", required=False, default=20, help="epochs")
 arg.add_argument("-lr", "--learning_rate", required=False, type=float, default=1e-3, help="learning rate")
 arg.add_argument("-m", "--model_saved_path", required=False, default="saved_models", help="model saved path")
@@ -33,16 +34,10 @@ arg.add_argument("-d", "--image_dir", required=False, default="dataset/images", 
 arg.add_argument("-c", "--csv_dir", required=False, default="dataset/labels", help="csv dir")
 arg.add_argument("-t", "--train_csv", required=False, default="train_labels.csv", help="train csv")
 arg.add_argument("-v", "--val_csv", required=False, default="val_labels.csv", help="val csv")
-arg.add_argument("-p", "--with_pretrained", required=False, default=True, help="with pretrained model or not")
 arg.add_argument("-s", "--image_size", required=False, default=(224, 224), help="image size")
 arg.add_argument("-w", "--use_wandb", required=False, type=int, default=1, help="use wandb or not")
 
 opt = vars(arg.parse_args())
-
-# show options formally
-print("Options:")
-for k, v in opt.items():
-    print("\t{}: {}".format(k, v))
 
 TASK_NAME = opt["task_name"]
 
@@ -63,6 +58,10 @@ else:
     opt["use_wandb"] = 0
     print('Using device:cpu')
 
+# show options formally
+print("Options:")
+for k, v in opt.items():
+    print("\t{}: {}".format(k, v))
 
 def learning_rate_decay(optimizer, epoch, decay_rate=0.1, decay_epoch=5):
     """
@@ -102,9 +101,9 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
         model.train()
         with tqdm.tqdm(train_loader, unit='batch') as pbar:
             for batch_idx, datas in enumerate(train_loader):
-                data, target = datas["image"].to(device), datas["annotations"].to(device)
+                data, target,mask = datas["image"].to(device), datas["annotations"].to(device),datas["masks"].to(device)
                 optimizer.zero_grad()
-                output = model(data)
+                output = model(data,mask)
                 loss = criterion(output, target)
                 if opt["use_wandb"]:
                     print()
@@ -149,7 +148,7 @@ def validate(model, val_loader, criterion):
 
     with torch.no_grad():
         for datas in tqdm.tqdm(val_loader):
-            data, target = datas["image"].to(device), datas["annotations"].to(device)
+            data, target,mask = datas["image"].to(device), datas["annotations"].to(device),datas["masks"].to(device)
             output = model(data)
             val_loss.append(criterion(output, target).item())
             pred_list.append(output)
@@ -158,9 +157,6 @@ def validate(model, val_loader, criterion):
             target_score_list += dis_2_score(target).tolist()
 
         val_loss = sum(val_loss) / len(val_loss)
-        pred = torch.cat(pred_list, dim=0)
-        target = torch.cat(target_list, dim=0)
-        # emd = EMD_loss(pred, target)
 
         # 计算皮尔逊相关系数
         pearson = pearsonr(pred_score_list, target_score_list)[0]
@@ -194,22 +190,17 @@ def main():
     train_csv = os.path.join(csv_dir, opt["train_csv"])
     val_csv = os.path.join(csv_dir, opt["val_csv"])
 
-    train_dataset = AVADataset(csv_file=train_csv, root_dir=image_dir, transform=train_transform, mask=False)
-    val_dataset = AVADataset(csv_file=val_csv, root_dir=image_dir, transform=val_transform, mask=False)
+    train_dataset = AVADataset(csv_file=train_csv, root_dir=image_dir, transform=train_transform,mask_num=30)
+    val_dataset = AVADataset(csv_file=val_csv, root_dir=image_dir, transform=val_transform,mask_num=30)
 
-    train_loader = DataLoader(train_dataset, batch_size=opt["batch_size"], shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=opt["batch_size"], shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=opt["batch_size"], shuffle=True, num_workers=4)
+    val_loader = DataLoader(val_dataset, batch_size=opt["batch_size"], shuffle=False, num_workers=4)
 
-    model = torchvision.models.resnet50(pretrained=opt["with_pretrained"])
-    model.fc = nn.Sequential(
-        nn.Dropout(0.75),
-        nn.Linear(model.fc.in_features, 10),
-        nn.Softmax(dim=1)
-    )
+    model = AAM(mask_num=30,feat_num=64)
     model.to(device)
 
     criterion = EMD_loss()  # it can be replaced by other loss function
-    optimizer = optim.Adam(model.parameters(), lr=opt["learning_rate"],betas=(0.9, 0.9))
+    optimizer = optim.Adam(model.parameters(), lr=opt["learning_rate"], betas=(0.9, 0.9))
 
     # you can use wandb to log your training process
     # if not, just set use_wandb to False
