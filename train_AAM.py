@@ -108,7 +108,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
                 optimizer.zero_grad()
                 output = model(data, mask)
                 loss = criterion(output, target)
-                if opt["use_wandb"]:
+                if not opt["use_wandb"]:
                     print()
                     print(f"0:output:{output[0].detach().cpu().numpy()}, "
                           f"\ntarget:{target[0].detach().cpu().numpy()}")
