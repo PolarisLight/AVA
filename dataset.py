@@ -18,7 +18,7 @@ import torchvision.transforms as transforms
 from fastsam import FastSAM, FastSAMPrompt
 
 train_transform = transforms.Compose([
-    transforms.Resize((512, 512)),
+    transforms.Resize((224, 224)),
     # transforms.RandomCrop(448),
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
@@ -64,8 +64,13 @@ class AVADataset(data.Dataset):
         # resize img
         image = image.resize((self.imgsz, self.imgsz))
         if self.mask:
-            mask = self.FASTSAM(image, device=self.device, retina_masks=True,
-                                imgsz=self.imgsz, conf=0.2, iou=0.9, verbose=False)[0].masks.data.cpu()
+            try:
+                mask = self.FASTSAM(image, device=self.device, retina_masks=True,
+                                    imgsz=self.imgsz, conf=0.2, iou=0.9, verbose=False)[0].masks.data.cpu()
+            except Exception as e:
+                print(e)
+                mask = torch.ones((self.mask_num, self.imgsz, self.imgsz))
+
 
             mask_sum = mask.view(mask.shape[0], -1).sum(dim=1)
 

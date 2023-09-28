@@ -36,7 +36,7 @@ arg.add_argument("-t", "--train_csv", required=False, default="train_labels.csv"
 arg.add_argument("-v", "--val_csv", required=False, default="val_labels.csv", help="val csv")
 arg.add_argument("-s", "--image_size", required=False, default=(224, 224), help="image size")
 arg.add_argument("-w", "--use_wandb", required=False, type=int, default=1, help="use wandb or not")
-arg.add_argument("-nw","--num_workers",required=False,type=int,default=0,help="num_workers")
+arg.add_argument("-nw", "--num_workers", required=False, type=int, default=0, help="num_workers")
 
 opt = vars(arg.parse_args())
 
@@ -63,6 +63,7 @@ else:
 print("Options:")
 for k, v in opt.items():
     print("\t{}: {}".format(k, v))
+
 
 def learning_rate_decay(optimizer, epoch, decay_rate=0.1, decay_epoch=5):
     """
@@ -102,9 +103,10 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
         model.train()
         with tqdm.tqdm(train_loader, unit='batch') as pbar:
             for batch_idx, datas in enumerate(train_loader):
-                data, target,mask = datas["image"].to(device), datas["annotations"].to(device),datas["masks"].to(device)
+                data, target, mask = datas["image"].to(device), datas["annotations"].to(device), datas["masks"].to(
+                    device)
                 optimizer.zero_grad()
-                output = model(data,mask)
+                output = model(data, mask)
                 loss = criterion(output, target)
                 if opt["use_wandb"]:
                     print()
@@ -149,7 +151,7 @@ def validate(model, val_loader, criterion):
 
     with torch.no_grad():
         for datas in tqdm.tqdm(val_loader):
-            data, target,mask = datas["image"].to(device), datas["annotations"].to(device),datas["masks"].to(device)
+            data, target, mask = datas["image"].to(device), datas["annotations"].to(device), datas["masks"].to(device)
             output = model(data)
             val_loss.append(criterion(output, target).item())
             pred_list.append(output)
@@ -191,13 +193,13 @@ def main():
     train_csv = os.path.join(csv_dir, opt["train_csv"])
     val_csv = os.path.join(csv_dir, opt["val_csv"])
 
-    train_dataset = AVADataset(csv_file=train_csv, root_dir=image_dir, transform=train_transform,mask_num=30)
-    val_dataset = AVADataset(csv_file=val_csv, root_dir=image_dir, transform=val_transform,mask_num=30)
+    train_dataset = AVADataset(csv_file=train_csv, root_dir=image_dir, transform=train_transform, mask_num=30,imgsz=224)
+    val_dataset = AVADataset(csv_file=val_csv, root_dir=image_dir, transform=val_transform, mask_num=30,imgsz=224)
 
-    train_loader = DataLoader(train_dataset, batch_size=opt["batch_size"], shuffle=True,num_workers=opt["num_workers"])
-    val_loader = DataLoader(val_dataset, batch_size=opt["batch_size"], shuffle=False,num_workers=opt["num_workers"])
+    train_loader = DataLoader(train_dataset, batch_size=opt["batch_size"], shuffle=True, num_workers=opt["num_workers"])
+    val_loader = DataLoader(val_dataset, batch_size=opt["batch_size"], shuffle=False, num_workers=opt["num_workers"])
 
-    model = AAM(mask_num=30,feat_num=64)
+    model = AAM(mask_num=30, feat_num=64)
     model.to(device)
 
     criterion = EMD_loss()  # it can be replaced by other loss function
