@@ -135,15 +135,18 @@ class GraphConvLayer(nn.Module):
 
 
 class AAM(nn.Module):
-    def __init__(self,mask_num=30,feat_num=64,out_class=10):
+    def __init__(self, mask_num=30, feat_num=64, out_class=10):
         super(AAM, self).__init__()
         self.feature_extractor = UNet(in_channel=3, out_channel=feat_num)
         self.GCN_layer1 = GraphConvLayer(dim_feature=feat_num)
         self.GCN_layer2 = GraphConvLayer(dim_feature=feat_num)
         self.projector = nn.Sequential(
             nn.Flatten(),
-            nn.Dropout(0.75),
-            nn.Linear(feat_num*mask_num, out_class),
+            nn.Dropout(0.5),
+            nn.Linear(feat_num * mask_num, feat_num, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.5),
+            nn.Linear(feat_num, out_class),
             nn.Softmax(dim=1)
         )
 

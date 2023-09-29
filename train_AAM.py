@@ -28,7 +28,7 @@ arg = argparse.ArgumentParser()
 arg.add_argument("-n", "--task_name", required=False, default="AAM", type=str, help="task name")
 arg.add_argument("-b", "--batch_size", required=False, default=32, type=int, help="batch size")
 arg.add_argument("-e", "--epochs", required=False, default=20, help="epochs")
-arg.add_argument("-lr", "--learning_rate", required=False, type=float, default=1e-3, help="learning rate")
+arg.add_argument("-lr", "--learning_rate", required=False, type=float, default=1e-4, help="learning rate")
 arg.add_argument("-m", "--model_saved_path", required=False, default="saved_models", help="model saved path")
 arg.add_argument("-d", "--image_dir", required=False, default="dataset/images", help="image dir")
 arg.add_argument("-c", "--csv_dir", required=False, default="dataset/labels", help="csv dir")
@@ -152,7 +152,7 @@ def validate(model, val_loader, criterion):
     with torch.no_grad():
         for datas in tqdm.tqdm(val_loader):
             data, target, mask = datas["image"].to(device), datas["annotations"].to(device), datas["masks"].to(device)
-            output = model(data)
+            output = model(data, mask)
             val_loss.append(criterion(output, target).item())
             pred_list.append(output)
             target_list.append(target)
@@ -193,13 +193,14 @@ def main():
     train_csv = os.path.join(csv_dir, opt["train_csv"])
     val_csv = os.path.join(csv_dir, opt["val_csv"])
 
-    train_dataset = AVADataset(csv_file=train_csv, root_dir=image_dir, transform=train_transform, mask_num=30,imgsz=224)
-    val_dataset = AVADataset(csv_file=val_csv, root_dir=image_dir, transform=val_transform, mask_num=30,imgsz=224)
+    train_dataset = AVADataset(csv_file=train_csv, root_dir=image_dir, transform=train_transform, mask_num=30,
+                               imgsz=224)
+    val_dataset = AVADataset(csv_file=val_csv, root_dir=image_dir, transform=val_transform, mask_num=30, imgsz=224)
 
     train_loader = DataLoader(train_dataset, batch_size=opt["batch_size"], shuffle=True, num_workers=opt["num_workers"])
     val_loader = DataLoader(val_dataset, batch_size=opt["batch_size"], shuffle=False, num_workers=opt["num_workers"])
 
-    model = AAM(mask_num=30, feat_num=64)
+    model = AAM(mask_num=30, feat_num=128)
     model.to(device)
 
     criterion = EMD_loss()  # it can be replaced by other loss function
