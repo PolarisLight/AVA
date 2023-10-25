@@ -11,11 +11,12 @@ import os
 import h5py
 import sys
 
-img_files = glob.glob("dataset/images/*.jpg")
+img_files = glob.glob(" ")
+save_root = "dataset/masks/"
 
 # default sam_vit_h_4b8939
 # vit_b sam_vit_b_01ec64
-sam = sam_model_registry["vit_b"](checkpoint="sam_vit_b_01ec64.pth")
+sam = sam_model_registry["vit_h"](checkpoint="sam_vit_h_4b8939.pth")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 sam.to(device)
@@ -23,19 +24,31 @@ mask_generator = SamAutomaticMaskGenerator(sam, min_mask_region_area=100, points
 
 
 def get_img_masks(img_name):
-    img = cv2.imread("dataset/images/" + img_name)
+    img = cv2.imread(img_name)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
+    if sys.platform.startswith('win'):
+        name = img_name.split("\\")[-1]
+    elif sys.platform.startswith('linux'):
+        name = img_name.split("/")[-1]
+    else:
+        print("Unsupport platform")
+        exit(1)
     masks = mask_generator.generate(img)
-
-    array_masks = []
-    for mask in masks:
-        mask["segmentation"] = [[1 if i else 0 for i in j] for j in mask["segmentation"]]
-        array_masks.append(mask["segmentation"])
+    try:
+        array_masks = []
+        for mask in masks:
+            mask["segmentation"] = [[1 if i else 0 for i in j] for j in mask["segmentation"]]
+            array_masks.append(mask["segmentation"])
+    except Exception as e:
+        print(e)
+        array_masks = np.zeros((1, img.shape[0], img.shape[1]))
+    finally:
+        pass
     array_masks = np.array(array_masks)
-    with h5py.File("dataset/masks/mask.h5", "a") as f:
+    with h5py.File(save_root + "masks.h5", "a") as f:
         # 将img_name和对应的array_masks存入f
-        f.create_dataset(img_name,data=array_masks)
+        f.create_dataset(name, data=array_masks)
 
 
 if __name__ == "__main__":
@@ -48,5 +61,9 @@ if __name__ == "__main__":
             else:
                 print("Unsupport platform")
                 exit(1)
-            get_img_masks(img_name)
+            pbar.set_description(f"Processing {img_name}")
+            get_img_masks(img_file)
 
+            pbar.update(1)
+            if i > 10:
+                break

@@ -8,6 +8,7 @@ import torch
 import glob
 import os
 import h5py
+import sys
 
 img_files = glob.glob("dataset/images/*.jpg")
 
@@ -55,7 +56,13 @@ if __name__ == "__main__":
     l_times = []
     b_times = []
     for i, img_file in enumerate(img_files):
-        img_name = img_file.split("\\")[-1]
+        if sys.platform.startswith('win'):
+            img_name = img_file.split("\\")[-1]
+        elif sys.platform.startswith('linux'):
+            img_name = img_file.split("/")[-1]
+        else:
+            print("Unsupport platform")
+            exit(1)
         h_time, l_time, b_time = get_img_masks(img_name)
         h_times.append(h_time)
         l_times.append(l_time)
