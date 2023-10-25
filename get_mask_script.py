@@ -26,10 +26,14 @@ sam = sam_model_registry["vit_h"](checkpoint="sam_vit_h_4b8939.pth")
 device = "cuda" if torch.cuda.is_available() else "cpu"
 sam.to(device)
 mask_generator = SamAutomaticMaskGenerator(sam, min_mask_region_area=100, points_per_batch=64)
-
+error_log = open("error_log.txt", "w")
 
 def get_img_masks(img_name):
     img = cv2.imread(img_name)
+    if img is None:
+        error_log.write(img_name + "\n")
+        print(img_name + " is None")
+        return
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     if sys.platform.startswith('win'):
@@ -54,6 +58,7 @@ def get_img_masks(img_name):
     with h5py.File(save_root + "masks.h5", "a") as f:
         # 将img_name和对应的array_masks存入f
         f.create_dataset(name, data=array_masks)
+    return
 
 
 if __name__ == "__main__":
