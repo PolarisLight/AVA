@@ -1,18 +1,23 @@
 import tqdm
 from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
-import matplotlib.pyplot as plt
 import numpy as np
 import cv2
-import time
-import json
 import torch
 import glob
-import os
 import h5py
 import sys
+import argparse
+import os
 
-img_files = glob.glob(" ")
-save_root = "dataset/masks/"
+argparser = argparse.ArgumentParser()
+argparser.add_argument("-d", "--data_dir", required=False, default="dataset/images/", type=str, help="data dir")
+argparser.add_argument("-s", "--save_root", required=False, default="dataset/images/masks/", type=str, help="save dir")
+
+opt = vars(argparser.parse_args())
+
+img_files = glob.glob(opt["data_dir"] + "*.jpg")
+save_root = opt["save_root"]
+os.makedirs(save_root, exist_ok=True)
 
 # default sam_vit_h_4b8939
 # vit_b sam_vit_b_01ec64
@@ -65,5 +70,4 @@ if __name__ == "__main__":
             get_img_masks(img_file)
 
             pbar.update(1)
-            if i > 10:
-                break
+
