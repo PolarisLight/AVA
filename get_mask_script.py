@@ -26,19 +26,22 @@ sam = sam_model_registry["vit_h"](checkpoint="sam_vit_h_4b8939.pth")
 device = "cuda" if torch.cuda.is_available() else "cpu"
 sam.to(device)
 mask_generator = SamAutomaticMaskGenerator(sam, min_mask_region_area=100, points_per_batch=64)
-error_log = open("error_log.txt", "w")
+error_log = "error_log.txt"
 
 def get_img_masks(img_name):
     img = cv2.imread(img_name)
     if img is None:
-        error_log.write(img_name + "\n")
+        with open(error_log, "a") as f:
+            f.write(img_name + "\n")
         print(img_name + " is None")
         return
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-    if sys.platform.startswith('win'):
+    current_system = sys.platform
+    if current_system.startswith('win'):
         name = img_name.split("\\")[-1]
-    elif sys.platform.startswith('linux'):
+    elif current_system.startswith('linux'):
+        name = img_name.split("/")[-1]
+    elif current_system.startswith("darwin"):
         name = img_name.split("/")[-1]
     else:
         print("Unsupport platform")
@@ -55,6 +58,18 @@ def get_img_masks(img_name):
     finally:
         pass
     array_masks = np.array(array_masks)
+    # 按mask面积排列
+    mask_sum = array_masks.view(array_masks.shape[0], -1).sum(dim=1)
+    # 获取排序后的索引
+    sorted_indices = torch.argsort(mask_sum, descending=True)
+    # 根据排序的索引重新排列掩码
+    sorted_mask = array_masks[sorted_indices]
+    # 选取前30个
+    if sorted_mask.shape[0] > 30:
+        array_masks = sorted_mask[:30]
+    else:
+        array_masks = sorted_mask
+    print(array_masks.shape)
     with h5py.File(save_root + "masks.h5", "a") as f:
         # 将img_name和对应的array_masks存入f
         f.create_dataset(name, data=array_masks)
@@ -64,9 +79,12 @@ def get_img_masks(img_name):
 if __name__ == "__main__":
     with tqdm.tqdm(total=len(img_files)) as pbar:
         for i, img_file in enumerate(img_files):
-            if sys.platform.startswith('win'):
+            current_system = sys.platform
+            if current_system.startswith('win'):
                 img_name = img_file.split("\\")[-1]
-            elif sys.platform.startswith('linux'):
+            elif current_system.startswith('linux'):
+                img_name = img_file.split("/")[-1]
+            elif current_system.startswith("darwin"):
                 img_name = img_file.split("/")[-1]
             else:
                 print("Unsupport platform")
@@ -75,4 +93,6 @@ if __name__ == "__main__":
             get_img_masks(img_file)
 
             pbar.update(1)
+            if i > 5:
+                break
 
