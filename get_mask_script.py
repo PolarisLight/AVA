@@ -57,11 +57,16 @@ def get_img_masks(img_name):
         array_masks = np.zeros((1, img.shape[0], img.shape[1]))
     finally:
         pass
-    array_masks = np.array(array_masks)
-    # 按mask面积排列
-    mask_sum = array_masks.view(array_masks.shape[0], -1).sum(dim=1)
+    # 假设array_masks是NumPy数组的列表
+    array_masks = [np.array(mask) for mask in array_masks]
+
+    # 将列表中的数组转换为具有uint8数据类型的NumPy数组
+    array_masks = np.array(array_masks, dtype=np.uint8)
+
+    # 现在，你可以在特定维度上计算求和
+    mask_sum = array_masks.reshape(array_masks.shape[0], -1).sum(axis=1)
     # 获取排序后的索引
-    sorted_indices = torch.argsort(mask_sum, descending=True)
+    sorted_indices = np.argsort(mask_sum)
     # 根据排序的索引重新排列掩码
     sorted_mask = array_masks[sorted_indices]
     # 选取前30个
