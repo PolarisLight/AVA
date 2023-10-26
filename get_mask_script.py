@@ -74,7 +74,6 @@ def get_img_masks(img_name):
         array_masks = sorted_mask[:30]
     else:
         array_masks = sorted_mask
-    print(array_masks.shape)
     with h5py.File(save_root + "masks.h5", "a") as f:
         # 将img_name和对应的array_masks存入f
         f.create_dataset(name, data=array_masks)
