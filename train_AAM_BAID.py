@@ -13,9 +13,9 @@ from sklearn.metrics import accuracy_score
 import tqdm
 import wandb  # wandb is a tool for visualizing the training process, please refer to https://wandb.ai/site
 
-from dataset import AVADatasetFastSAM, train_transform, val_transform
+from dataset import BBDataset, train_transform, val_transform
 from utils import EMD_loss, dis_2_score
-from AAM import AAM
+from AAM import *
 
 # this is for solving the problem of "OMP: Error #15: Initializing libiomp5.dylib,
 # but found libiomp5.dylib already initialized."
@@ -25,18 +25,18 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 arg = argparse.ArgumentParser()
-arg.add_argument("-n", "--task_name", required=False, default="AAM", type=str, help="task name")
-arg.add_argument("-b", "--batch_size", required=False, default=32, type=int, help="batch size")
+arg.add_argument("-n", "--task_name", required=False, default="AAM-M20-F64", type=str, help="task name")
+arg.add_argument("-b", "--batch_size", required=False, default=64, type=int, help="batch size")
 arg.add_argument("-e", "--epochs", required=False, default=20, help="epochs")
-arg.add_argument("-lr", "--learning_rate", required=False, type=float, default=1e-4, help="learning rate")
+arg.add_argument("-lr", "--learning_rate", required=False, type=float, default=3e-4, help="learning rate")
 arg.add_argument("-m", "--model_saved_path", required=False, default="saved_models", help="model saved path")
-arg.add_argument("-d", "--image_dir", required=False, default="dataset/images", help="image dir")
-arg.add_argument("-c", "--csv_dir", required=False, default="dataset/labels", help="csv dir")
-arg.add_argument("-t", "--train_csv", required=False, default="train_labels.csv", help="train csv")
-arg.add_argument("-v", "--val_csv", required=False, default="val_labels.csv", help="val csv")
+arg.add_argument("-d", "--image_dir", required=False, default="F:\\Dataset\\BAID\\images", help="image dir")
+arg.add_argument("-c", "--csv_dir", required=False, default="F:\\Dataset\\BAID\\dataset", help="csv dir")
 arg.add_argument("-s", "--image_size", required=False, default=(224, 224), help="image size")
 arg.add_argument("-w", "--use_wandb", required=False, type=int, default=1, help="use wandb or not")
 arg.add_argument("-nw", "--num_workers", required=False, type=int, default=0, help="num_workers")
+arg.add_argument("-mn", "--mask_num", required=False, type=int, default=20, help="mask num")
+arg.add_argument("-fn", "--feat_num", required=False, type=int, default=64, help="feature num")
 
 opt = vars(arg.parse_args())
 
@@ -65,7 +65,7 @@ for k, v in opt.items():
     print("\t{}: {}".format(k, v))
 
 
-def learning_rate_decay(optimizer, epoch, decay_rate=0.1, decay_epoch=5):
+def learning_rate_decay(optimizer, epoch, decay_rate=0.5, decay_epoch=5):
     """
     simple linear learning rate decay
     :param optimizer: instance of optimizer
@@ -103,11 +103,15 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
         model.train()
         with tqdm.tqdm(train_loader, unit='batch') as pbar:
             for batch_idx, datas in enumerate(train_loader):
-                data, target, mask = datas["image"].to(device), datas["annotations"].to(device), datas["masks"].to(
-                    device)
+                data, target, mask, loc = datas
+                data, target, mask, loc = data.to(device), target.to(device).float(), mask.to(device), loc.to(
+                    device).float()
                 optimizer.zero_grad()
-                output = model(data, mask)
+
+                output = model(data, mask, loc).squeeze(-1)*10.0
+                # output = dis_2_score(output)
                 loss = criterion(output, target)
+
                 if not opt["use_wandb"]:
                     print()
                     print(f"0:output:{output[0].detach().cpu().numpy()}, "
@@ -116,11 +120,12 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
 
                 optimizer.step()
                 pbar.update(1)
+
                 pbar.set_description('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss:{:.6f}'.format(
                     epoch, batch_idx * len(data), len(train_loader.dataset),
                            100. * batch_idx / len(train_loader), loss.item()
                 ))
-                if opt["use_wandb"]:
+                if opt["use_wandb"] and batch_idx % 10 == 0:
                     wandb.log({"loss": loss, "epoch": epoch})
 
         val_loss = validate(model, val_loader, criterion)
@@ -146,31 +151,29 @@ def validate(model, val_loader, criterion):
     val_loss = []
     pred_list = []
     target_list = []
-    pred_score_list = []
-    target_score_list = []
 
     with torch.no_grad():
-        for datas in tqdm.tqdm(val_loader):
-            data, target, mask = datas["image"].to(device), datas["annotations"].to(device), datas["masks"].to(device)
-            output = model(data, mask)
+        for i, datas in tqdm.tqdm(enumerate(val_loader)):
+            data, target, mask, loc = datas
+            data, target, mask, loc = data.to(device), target.to(device), mask.to(device), loc.to(device)
+            output = model(data, mask, loc).squeeze(-1) * 10.0
+
             val_loss.append(criterion(output, target).item())
-            pred_list.append(output)
-            target_list.append(target)
-            pred_score_list += dis_2_score(output).tolist()
-            target_score_list += dis_2_score(target).tolist()
+            pred_list.extend(output.tolist())
+            target_list.extend(target.tolist())
 
         val_loss = sum(val_loss) / len(val_loss)
 
         # 计算皮尔逊相关系数
-        pearson = pearsonr(pred_score_list, target_score_list)[0]
+        pearson = pearsonr(pred_list, target_list)[0]
         # 计算斯皮尔曼相关系数
-        spearman = spearmanr(pred_score_list, target_score_list)[0]
+        spearman = spearmanr(pred_list, target_list)[0]
 
-        pred_score_list = np.array(pred_score_list)
-        target_score_list = np.array(target_score_list)
+        pred_score_list = np.array(pred_list)
+        target_score_list = np.array(target_list)
 
-        pred_label = np.where(pred_score_list <= 5.00, 0, 1)
-        target_label = np.where(target_score_list <= 5.00, 0, 1)
+        pred_label = np.where(pred_score_list <= 5.0, 0, 1)
+        target_label = np.where(target_score_list <= 5.0, 0, 1)
 
         acc = accuracy_score(target_label, pred_label)
 
@@ -190,27 +193,25 @@ def main():
     """
     image_dir = opt["image_dir"]
     csv_dir = opt["csv_dir"]
-    train_csv = os.path.join(csv_dir, opt["train_csv"])
-    val_csv = os.path.join(csv_dir, opt["val_csv"])
 
-    train_dataset = AVADatasetFastSAM(csv_file=train_csv, root_dir=image_dir, transform=train_transform, mask_num=30,
-                               imgsz=224)
-    val_dataset = AVADatasetFastSAM(csv_file=val_csv, root_dir=image_dir, transform=val_transform, mask_num=30, imgsz=224)
+    train_dataset = BBDataset(file_dir=csv_dir, img_dir=image_dir, type='train', test=False, mask_num=opt["mask_num"])
+    val_dataset = BBDataset(file_dir=csv_dir, img_dir=image_dir, type='validation', test=False,
+                            mask_num=opt["mask_num"])
 
     train_loader = DataLoader(train_dataset, batch_size=opt["batch_size"], shuffle=True, num_workers=opt["num_workers"])
     val_loader = DataLoader(val_dataset, batch_size=opt["batch_size"], shuffle=False, num_workers=opt["num_workers"])
 
-    model = AAM(mask_num=30, feat_num=128)
+    model = AAM1(mask_num=opt['mask_num'], feat_num=opt['feat_num'], out_class=1)
     model.to(device)
 
-    criterion = EMD_loss()  # it can be replaced by other loss function
+    criterion = nn.MSELoss()  # it can be replaced by other loss function
     optimizer = optim.Adam(model.parameters(), lr=opt["learning_rate"], betas=(0.9, 0.9))
 
     # you can use wandb to log your training process
     # if not, just set use_wandb to False
     if opt['use_wandb']:
         wandb.init(
-            project="AVA",
+            project="BAID",
             name=TASK_NAME,
             config={
                 "learning_rate": opt["learning_rate"],

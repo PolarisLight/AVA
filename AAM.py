@@ -29,6 +29,39 @@ class convblock(nn.Module):
         return out
 
 
+class resconvblock(nn.Module):
+    """
+
+    """
+
+    def __init__(self, in_channel, out_channel, kernel_size=3, stride=1, padding=1, bias=True, groups=1):
+        super(resconvblock, self).__init__()
+        self.in_channel = in_channel
+        self.out_channel = out_channel
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channel, out_channel, kernel_size=kernel_size, stride=stride, padding=padding,
+                      bias=bias, groups=groups),
+            nn.BatchNorm2d(out_channel),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channel, out_channel, kernel_size=kernel_size, stride=stride, padding=padding,
+                      bias=bias, groups=groups),
+            nn.BatchNorm2d(out_channel),
+            nn.ReLU(inplace=True)
+        )
+        if in_channel != out_channel:
+            self.shortcut = nn.Conv2d(in_channel, out_channel, kernel_size=1, stride=1, padding=0, bias=True,
+                                      groups=groups)
+
+    def forward(self, x):
+        out = self.conv(x)
+        if self.in_channel != self.out_channel:
+            out = out + self.shortcut(x)
+        else:
+            out = out + x
+
+        return out
+
+
 class upblock(nn.Module):
     """
     Up Convolution Block
@@ -50,10 +83,11 @@ class upblock(nn.Module):
 
 
 class UNet(nn.Module):
-    def __init__(self, in_channel=3, out_channel=32, scale=3):
+    def __init__(self, in_channel=3, out_channel=32, scale=3, bottleneck=False):
         super(UNet, self).__init__()
         self.scale = scale
         self.out_channel = out_channel
+        self.bottleneck = bottleneck
         base_channel = 64
         self.features = [base_channel, base_channel * 2, base_channel * 4, base_channel * 8,
                          base_channel * 16]  # [64, 128, 256, 512, 1024]
@@ -86,6 +120,7 @@ class UNet(nn.Module):
         x4 = self.downsample3(x3)  # 256,128,128 -> 256,64,64
 
         x4 = self.bridge(x4)  # 256,64,64 -> 512,64,64
+        bottleneck = x4
 
         x4 = self.up_block1(x4)  # 512,64,64 -> 256,128,128
         x3 = torch.cat([x3, x4], dim=1)  # [256,128,128;256,128,128] -> 512,128,128
@@ -100,7 +135,49 @@ class UNet(nn.Module):
         if self.out_channel != self.features[0]:
             x1 = self.out(x1)
 
-        return x1
+        if self.bottleneck:
+            return x1, bottleneck
+        else:
+            return x1
+
+
+class FCN(nn.Module):
+    def __init__(self, in_channel=3, out_channel=32, scale=4, bias=True, groups=1):
+        super(FCN, self).__init__()
+        self.scale = scale
+        self.out_channel = out_channel
+        base_channel = in_channel * 2
+        self.features = [base_channel, base_channel * (2 ** 2), base_channel * (2 ** 3), base_channel * (2 ** 4),
+                         base_channel * (2 ** 5)]  # [64, 128, 256, 512, 1024]
+        self.down_block1 = resconvblock(in_channel, self.features[0], bias=bias,
+                                        groups=groups)  # 3,224,224 -> 64,224,224
+        self.downsample1 = nn.MaxPool2d(kernel_size=2, stride=2)  # 64,224,224 -> 64,112,112
+        self.down_block2 = resconvblock(self.features[0], self.features[1], bias=bias,
+                                        groups=groups)  # 64,112,112 -> 128,112,112
+        self.downsample2 = nn.MaxPool2d(kernel_size=2, stride=2)  # 128,112,112 -> 128,56,56
+        self.down_block3 = resconvblock(self.features[1], self.features[2], bias=bias,
+                                        groups=groups)  # 128,56,56 -> 256,56,56
+        self.downsample3 = nn.MaxPool2d(kernel_size=2, stride=2)  # 256,56,56 -> 256,28,28
+        self.down_block4 = resconvblock(self.features[2], self.features[3], bias=bias,
+                                        groups=groups)  # 256,28,28 -> 512,28,28
+        self.downsample4 = nn.MaxPool2d(kernel_size=2, stride=2)  # 512,28,28 -> 512,14,14
+
+        self.bridge = resconvblock(self.features[3], self.features[4], bias=bias,
+                                   groups=groups)  # 512,14,14 -> 1024,14,14
+
+    def forward(self, x):
+        x = self.down_block1(x)  # 3,512,512 -> 64,512,512
+        x = self.downsample1(x)  # 64,512,512 -> 64,256,256
+        x = self.down_block2(x)  # 64,256,256 -> 128,256,256
+        x = self.downsample2(x)  # 128,256,256 -> 128,128,128
+        x = self.down_block3(x)  # 128,128,128 -> 256,128,128
+        x = self.downsample3(x)  # 256,128,128 -> 256,64,64
+        x = self.down_block4(x)  # 256,64,64 -> 512,64,64
+        x = self.downsample4(x)  # 512,64,64 -> 512,32,32
+
+        x = self.bridge(x)  # 512,32,32 -> 1024,32,32
+
+        return x
 
 
 class GraphConvLayer(nn.Module):
@@ -119,14 +196,16 @@ class GraphConvLayer(nn.Module):
         nn.init.xavier_uniform_(self.GCN_W)
         # nn.init.xavier_uniform_(self.GCN_B)
 
-    def forward(self, x):
+    def forward(self, x, A_spa):
         m1 = self.mapping1(x)
         m2 = self.mapping2(x)
 
         similarity = torch.matmul(m1, m2.transpose(1, 2))
-        similarity = F.softmax(similarity, dim=2)
+        A_sim = F.softmax(similarity, dim=2)
 
-        x = torch.matmul(similarity, x)
+        A = A_sim + A_spa
+
+        x = torch.matmul(A, x)
         x = torch.matmul(x, self.GCN_W)
         # x = x + self.GCN_B
         x = self.relu(x)
@@ -137,30 +216,227 @@ class GraphConvLayer(nn.Module):
 class AAM(nn.Module):
     def __init__(self, mask_num=30, feat_num=64, out_class=10):
         super(AAM, self).__init__()
-        self.feature_extractor = UNet(in_channel=3, out_channel=feat_num)
+        # self.feature_extractor = FCN(in_channel=3, out_channel=feat_num)
+        self.feat_num = feat_num
+        self.mask_num = mask_num
+        self.feature_extractor = torchvision.models.segmentation.fcn_resnet50(pretrained=True)
+        self.conv1x1 = nn.Conv2d(2048, feat_num, kernel_size=1, stride=1, padding=0, bias=False)
         self.GCN_layer1 = GraphConvLayer(dim_feature=feat_num)
         self.GCN_layer2 = GraphConvLayer(dim_feature=feat_num)
-        self.projector = nn.Sequential(
-            nn.Flatten(),
-            nn.Dropout(0.5),
-            nn.Linear(feat_num * mask_num, feat_num, bias=False),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.5),
-            nn.Linear(feat_num, out_class),
-            nn.Softmax(dim=1)
-        )
+        if out_class == 1:
+            self.gcn_projector = nn.Sequential(
+                nn.Flatten(),
+                nn.Dropout(0.5),
+                nn.Linear(feat_num * mask_num, out_class, bias=False),
+                nn.Sigmoid()
+            )
+            self.cnn_projector = nn.Sequential(
+                nn.Flatten(),
+                nn.Dropout(0.5),
+                nn.Linear(2048 * 14 * 14, out_class, bias=False),
+                nn.Sigmoid()
+            )
 
-    def forward(self, imgs, masks):
-        feats = self.feature_extractor(imgs)
-        masked_features = feats.unsqueeze(1) * masks.unsqueeze(2)
+        else:
+            self.gcn_projector = nn.Sequential(
+                nn.Flatten(),
+                nn.Dropout(0.5),
+                nn.Linear(feat_num * mask_num, out_class, bias=False),
+                nn.Softmax()
+            )
+            self.cnn_projector = nn.Sequential(
+                nn.Flatten(),
+                nn.Dropout(0.5),
+                nn.Linear(2048 * 14 * 14, out_class, bias=False),
+                nn.Softmax()
+            )
+
+    def forward(self, imgs, masks, mask_loc):
+        feats = self.feature_extractor.backbone(imgs)['out']
+        if self.feat_num != 2048:
+            feats = self.conv1x1(feats)
+        feats = F.avg_pool2d(feats, kernel_size=2)
+        cnn_pred = self.cnn_projector(feats)
+
+        masks = F.interpolate(masks, size=feats.size()[2:], mode="bilinear", align_corners=False)
+        feats = feats.unsqueeze(1) * masks.unsqueeze(2)
 
         # 计算全局平均池化
-        pooled_features = F.adaptive_avg_pool2d(masked_features, (1, 1)).squeeze(-1).squeeze(-1)
+        pooled_features = F.adaptive_avg_pool2d(feats, (1, 1)).squeeze(-1).squeeze(-1)
 
-        gcn1 = self.GCN_layer1(pooled_features)
-        gcn2 = self.GCN_layer2(gcn1)
+        batch_size, m, _ = mask_loc.size()
+
+        # 计算点之间的欧氏距离
+        # 首先扩展张量以进行广播计算
+        expanded_points1 = mask_loc.unsqueeze(2).expand(batch_size, m, m, 2)
+        expanded_points2 = mask_loc.unsqueeze(1).expand(batch_size, m, m, 2)
+
+        # 计算点之间的欧氏距离
+        A_spa = torch.norm(expanded_points1 - expanded_points2, dim=3)
+        A_spa = F.softmax(A_spa, dim=2)
+
+        gcn1 = self.GCN_layer1(pooled_features, A_spa)
+        gcn2 = self.GCN_layer2(gcn1, A_spa)
+
+        gcn_pred = self.gcn_projector(gcn2)
+
+        pred = (gcn_pred + cnn_pred) / 2
+
+        return pred
+
+
+class AAM1(nn.Module):
+    def __init__(self, mask_num=30, feat_num=64, out_class=10):
+        super(AAM1, self).__init__()
+        # self.feature_extractor = FCN(in_channel=3, out_channel=feat_num)
+        self.feat_num = feat_num
+        self.mask_num = mask_num
+        self.feature_extractor = FCN(in_channel=mask_num, out_channel=mask_num, bias=False, groups=mask_num)
+        self.cnn = torchvision.models.resnet50(pretrained=True)
+        self.cnn.fc = nn.Sequential(
+            nn.Linear(2048, out_class),
+            nn.Sigmoid() if out_class == 1 else nn.Softmax()
+        )
+
+        self.GCN_layer1 = GraphConvLayer(dim_feature=feat_num)
+        self.GCN_layer2 = GraphConvLayer(dim_feature=feat_num)
+
+        self.gcn_projector = nn.Sequential(
+            nn.Flatten(),
+            nn.Dropout(0.5),
+            nn.Linear(feat_num * mask_num, out_class, bias=False),
+            nn.Sigmoid() if out_class == 1 else nn.Softmax()
+        )
+
+    def forward(self, imgs, masks, mask_loc):
+        masked_img = imgs.unsqueeze(1) * masks.unsqueeze(2)  # 2,3,224,224 -> 2,30,3,224,224
+        masked_img = torch.mean(masked_img, dim=2)  # 2,30,3,224,224 -> 2,30,224,224
+
+        feats = self.feature_extractor(masked_img)
+
+        # 计算全局平均池化
+        feats = feats.view(feats.shape[0], self.mask_num, feats.shape[1] // self.mask_num, feats.shape[2],
+                           feats.shape[3])
+
+        pooled_features = F.adaptive_avg_pool2d(feats, (1, 1)).squeeze(-1).squeeze(-1)
+        # 将分割为mask_num组
+
+        # ============计算掩码空间关系============
+
+        batch_size, m, _ = mask_loc.size()
+
+        # 计算点之间的欧氏距离
+        # 首先扩展张量以进行广播计算
+        expanded_points1 = mask_loc.unsqueeze(2).expand(batch_size, m, m, 2)
+        expanded_points2 = mask_loc.unsqueeze(1).expand(batch_size, m, m, 2)
+
+        # 计算点之间的欧氏距离
+        A_spa = torch.norm(expanded_points1 - expanded_points2, dim=3)
+        A_spa = F.softmax(A_spa, dim=2)
+        # =====================================
+        gcn1 = self.GCN_layer1(pooled_features, A_spa)
+        gcn2 = self.GCN_layer2(gcn1, A_spa)
+
+        gcn_pred = self.gcn_projector(gcn2)
+        cnn_pred = self.cnn(imgs)
+
+        pred = (gcn_pred + cnn_pred) / 2
+
+        return pred
+
+
+class AAM_conv(nn.Module):
+    def __init__(self, mask_num=30, feat_num=64, out_class=10):
+        super(AAM_conv, self).__init__()
+        # self.feature_extractor = FCN(in_channel=3, out_channel=feat_num)
+        self.mask_num = mask_num
+        self.feat_num = feat_num
+        self.feature_extractor = torchvision.models.segmentation.fcn_resnet50(pretrained=False, num_classes=feat_num)
+        self.GCN_layer1 = GraphConvLayer(dim_feature=feat_num)
+        self.GCN_layer2 = GraphConvLayer(dim_feature=feat_num)
+        if out_class == 1:
+            self.projector = nn.Sequential(
+                nn.Flatten(),
+                nn.Dropout(0.5),
+                nn.Linear(feat_num * mask_num, feat_num, bias=False),
+                nn.ReLU(inplace=True),
+                nn.Dropout(0.5),
+                nn.Linear(feat_num, out_class),
+                nn.Sigmoid()
+            )
+        else:
+            self.projector = nn.Sequential(
+                nn.Flatten(),
+                nn.Dropout(0.5),
+                nn.Linear(feat_num * mask_num, feat_num, bias=False),
+                nn.ReLU(inplace=True),
+                nn.Dropout(0.5),
+                nn.Linear(feat_num, out_class),
+                nn.Softmax(dim=1)
+            )
+
+    def forward(self, imgs, masks, mask_loc):
+        feats = self.feature_extractor.backbone(imgs)['out']
+
+        feats = feats.unsqueeze(2).repeat(1, 1, self.mask_num, 1, 1)
+
+        feat_list = []
+        for feat in feats:
+            feat_list.append(F.conv2d(masks, feat, padding=28 // 2))
+
+        feats = torch.cat(feat_list, dim=1)
+        print(feats.shape)
+        # 计算全局平均池化
+        pooled_features = F.adaptive_avg_pool2d(feats, (1, 1)).squeeze(-1).squeeze(-1)
+
+        batch_size, m, _ = mask_loc.size()
+
+        # 计算点之间的欧氏距离
+        # 首先扩展张量以进行广播计算
+        expanded_points1 = mask_loc.unsqueeze(2).expand(batch_size, m, m, 2)
+        expanded_points2 = mask_loc.unsqueeze(1).expand(batch_size, m, m, 2)
+
+        # 计算点之间的欧氏距离
+        A_spa = torch.norm(expanded_points1 - expanded_points2, dim=3)
+        A_spa = F.softmax(A_spa, dim=2)
+
+        gcn1 = self.GCN_layer1(pooled_features, A_spa)
+        gcn2 = self.GCN_layer2(gcn1, A_spa)
 
         pred = self.projector(gcn2)
+
+        return pred
+
+
+class AAM_attn(nn.Module):
+    def __init__(self, mask_num=30, feat_num=64, out_class=10):
+        super(AAM_attn, self).__init__()
+        # self.feature_extractor = FCN(in_channel=3, out_channel=feat_num)
+        self.mask_num = mask_num
+        self.feat_num = feat_num
+        self.feature_extractor = FCN(in_channel=3, out_channel=feat_num)
+        self.mask_extractor = nn.Conv2d(mask_num, feat_num, kernel_size=1, stride=1, padding=0, bias=False)
+        self.v = nn.Conv2d(feat_num, feat_num, kernel_size=1, stride=1, padding=0, bias=False)
+
+        self.predictor = nn.Sequential(
+            nn.Flatten(),
+            nn.Dropout(0.5),
+            nn.Linear(1024 * 14 * 14, 2048, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.5),
+            nn.Linear(2048, out_class),
+            nn.Sigmoid()
+        )
+
+    def forward(self, imgs, masks, mask_loc):
+        feats = self.feature_extractor(imgs)
+        masks = F.interpolate(masks, size=feats.size()[2:], mode="bilinear", align_corners=False)
+        masks = self.mask_extractor(masks)
+
+        attn = F.softmax(masks * feats / 32, dim=1)
+        feats = self.v(feats * attn) + feats
+
+        pred = self.predictor(feats)
 
         return pred
 
