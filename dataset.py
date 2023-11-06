@@ -27,18 +27,20 @@ if compare_fastsam:
     from fastsam import FastSAM, FastSAMPrompt
 
 train_transform = transforms.Compose([
+    transforms.ToTensor(),
     transforms.Resize((224, 224)),
     # transforms.RandomCrop(448),
     transforms.RandomHorizontalFlip(),
-    transforms.ToTensor(),
+
     transforms.Normalize(mean=[0.485, 0.456, 0.406],
                          std=[0.229, 0.224, 0.225])
 ])
 
 val_transform = transforms.Compose([
+    transforms.ToTensor(),
     transforms.Resize((512, 512)),
     transforms.RandomCrop(448),
-    transforms.ToTensor(),
+
     transforms.Normalize(mean=[0.485, 0.456, 0.406],
                          std=[0.229, 0.224, 0.225])
 ])
@@ -113,7 +115,6 @@ class BBDataset(data.Dataset):
         self.mask_num = mask_num
         self.train_transformer = transforms.Compose(
             [
-                transforms.ToPILImage(),
                 transforms.Resize((224, 224)),
                 transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
@@ -123,7 +124,6 @@ class BBDataset(data.Dataset):
 
         self.test_transformer = transforms.Compose(
             [
-                transforms.ToPILImage(),
                 transforms.Resize((224, 224)),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=mean, std=std),
@@ -154,8 +154,7 @@ class BBDataset(data.Dataset):
 
     def __getitem__(self, index):
         pic_path = self.pic_paths[index]
-        img = cv2.imread(pic_path)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = Image.open(pic_path).convert('RGB')
         if self.if_test:
             img = self.test_transformer(img)
         else:

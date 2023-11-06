@@ -30,11 +30,11 @@ arg.add_argument("-b", "--batch_size", required=False, default=64, type=int, hel
 arg.add_argument("-e", "--epochs", required=False, default=20, help="epochs")
 arg.add_argument("-lr", "--learning_rate", required=False, type=float, default=3e-4, help="learning rate")
 arg.add_argument("-m", "--model_saved_path", required=False, default="saved_models", help="model saved path")
-arg.add_argument("-d", "--image_dir", required=False, default="F:\\Dataset\\BAID\\images", help="image dir")
-arg.add_argument("-c", "--csv_dir", required=False, default="F:\\Dataset\\BAID\\dataset", help="csv dir")
+arg.add_argument("-d", "--image_dir", required=False, default="D:\\Dataset\\BAID\\images", help="image dir")
+arg.add_argument("-c", "--csv_dir", required=False, default="D:\\Dataset\\BAID\\dataset", help="csv dir")
 arg.add_argument("-s", "--image_size", required=False, default=(224, 224), help="image size")
 arg.add_argument("-w", "--use_wandb", required=False, type=int, default=1, help="use wandb or not")
-arg.add_argument("-nw", "--num_workers", required=False, type=int, default=0, help="num_workers")
+arg.add_argument("-nw", "--num_workers", required=False, type=int, default=16, help="num_workers")
 arg.add_argument("-mn", "--mask_num", required=False, type=int, default=20, help="mask num")
 arg.add_argument("-fn", "--feat_num", required=False, type=int, default=64, help="feature num")
 
@@ -45,25 +45,6 @@ TASK_NAME = opt["task_name"]
 model_saved_path = os.path.join(opt["model_saved_path"], TASK_NAME)
 if not os.path.exists(model_saved_path):
     os.makedirs(model_saved_path, exist_ok=True)
-
-# CUDA, MPS(Mac) and CPU support
-if torch.cuda.is_available():
-    device = torch.device('cuda')
-    print('Using device:cuda')
-elif torch.backends.mps.is_available():
-    device = torch.device('mps')
-    opt["use_wandb"] = 0
-    print('Using device:mps')
-else:
-    device = torch.device('cpu')
-    opt["use_wandb"] = 0
-    print('Using device:cpu')
-
-# show options formally
-print("Options:")
-for k, v in opt.items():
-    print("\t{}: {}".format(k, v))
-
 
 def learning_rate_decay(optimizer, epoch, decay_rate=0.5, decay_epoch=5):
     """
@@ -191,6 +172,24 @@ def main():
     main function
     :return:
     """
+    # CUDA, MPS(Mac) and CPU support
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+        print('Using device:cuda')
+    elif torch.backends.mps.is_available():
+        device = torch.device('mps')
+        opt["use_wandb"] = 0
+        print('Using device:mps')
+    else:
+        device = torch.device('cpu')
+        opt["use_wandb"] = 0
+        print('Using device:cpu')
+
+    # show options formally
+    print("Options:")
+    for k, v in opt.items():
+        print("\t{}: {}".format(k, v))
+
     image_dir = opt["image_dir"]
     csv_dir = opt["csv_dir"]
 
@@ -201,7 +200,7 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=opt["batch_size"], shuffle=True, num_workers=opt["num_workers"])
     val_loader = DataLoader(val_dataset, batch_size=opt["batch_size"], shuffle=False, num_workers=opt["num_workers"])
 
-    model = AAM1(mask_num=opt['mask_num'], feat_num=opt['feat_num'], out_class=1)
+    model = AAM2(mask_num=opt['mask_num'], feat_num=opt['feat_num'], out_class=1)
     model.to(device)
 
     criterion = nn.MSELoss()  # it can be replaced by other loss function
