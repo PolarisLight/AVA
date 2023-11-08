@@ -25,18 +25,18 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 arg = argparse.ArgumentParser()
-arg.add_argument("-n", "--task_name", required=False, default="AAM-M40-F64-BIAS-LR1e-5", type=str, help="task name")
+arg.add_argument("-n", "--task_name", required=False, default="AAM-BIAS-MT-LR1e-5", type=str, help="task name")
 arg.add_argument("-b", "--batch_size", required=False, default=64, type=int, help="batch size")
 arg.add_argument("-e", "--epochs", required=False, default=20, help="epochs")
-arg.add_argument("-lr", "--learning_rate", required=False, type=float, default=1e-5, help="learning rate")
+arg.add_argument("-lr", "--learning_rate", required=False, type=float, default=3e-5, help="learning rate")
 arg.add_argument("-m", "--model_saved_path", required=False, default="saved_models", help="model saved path")
 arg.add_argument("-d", "--image_dir", required=False, default="D:\\Dataset\\BAID\\images", help="image dir")
 arg.add_argument("-c", "--csv_dir", required=False, default="D:\\Dataset\\BAID\\dataset", help="csv dir")
 arg.add_argument("-s", "--image_size", required=False, default=(224, 224), help="image size")
 arg.add_argument("-w", "--use_wandb", required=False, type=int, default=1, help="use wandb or not")
 arg.add_argument("-nw", "--num_workers", required=False, type=int, default=16, help="num_workers")
-arg.add_argument("-mn", "--mask_num", required=False, type=int, default=40, help="mask num")
-arg.add_argument("-fn", "--feat_num", required=False, type=int, default=64, help="feature num")
+arg.add_argument("-mn", "--mask_num", required=False, type=int, default=20, help="mask num")
+arg.add_argument("-fn", "--feat_num", required=False, type=int, default=512, help="feature num")
 
 opt = vars(arg.parse_args())
 
@@ -98,26 +98,36 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
                 data, target, mask, loc = data.to(device), target.to(device).float(), mask.to(device), loc.to(
                     device).float()
                 optimizer.zero_grad()
+                target_CLS = torch.stack([torch.where(target <= 5.0, torch.ones_like(target), torch.zeros_like(target)),
+                                          torch.where(target <= 5.0, torch.zeros_like(target),
+                                                      torch.ones_like(target))],
+                                         dim=1).to(device)
 
-                output = model(data, mask, loc).squeeze(-1) * 10.0
-                # output = dis_2_score(output)
-                loss = criterion(output, target)
+                output_reg,output_cls = model(data, mask, loc)
+
+                output_reg = 10 * output_reg.squeeze(-1)
+
+                loss_mse = criterion(output_reg, target)
+                loss_cls = F.cross_entropy(output_cls, target_CLS)
+
+                loss = loss_mse + loss_cls
 
                 if opt["use_wandb"]:
                     print()
-                    print(f"0:output:{output[0].detach().cpu().numpy()}, "
+                    print(f"0:output:{output_reg[0].detach().cpu().numpy()}"
                           f"\ntarget:{target[0].detach().cpu().numpy()}")
                 loss.backward()
 
                 optimizer.step()
+
+                pbar.set_description(
+                    'Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss:{:.6f}, CLS_loss:{:.6f}, MSE_loss:{:.6f}'.format(
+                        epoch, batch_idx * len(data), len(train_loader.dataset),
+                               100. * batch_idx / len(train_loader), loss.item(), loss_cls.item(), loss_mse.item()))
                 pbar.update(1)
 
-                pbar.set_description('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss:{:.6f}'.format(
-                    epoch, batch_idx * len(data), len(train_loader.dataset),
-                           100. * batch_idx / len(train_loader), loss.item()
-                ))
                 if opt["use_wandb"] and batch_idx % 10 == 0:
-                    wandb.log({"loss": loss, "epoch": epoch})
+                    wandb.log({"loss": loss, "CLS_loss": loss_cls, "MSE_loss": loss_mse, "epoch": epoch})
 
         val_loss = validate(model, val_loader, criterion)
 
@@ -147,11 +157,21 @@ def validate(model, val_loader, criterion):
         for i, datas in tqdm.tqdm(enumerate(val_loader)):
             data, target, mask, loc = datas
             data, target, mask, loc = data.to(device), target.to(device), mask.to(device), loc.to(device)
+            # turn target into one-hot label ,like [0,1] if target < 5.0 else [1,0]
+            target_CLS = torch.stack([torch.where(target <= 5.0, torch.ones_like(target), torch.zeros_like(target)),
+                                      torch.where(target <= 5.0, torch.zeros_like(target), torch.ones_like(target))],
+                                     dim=1).to(device)
 
-            output = model(data, mask, loc).squeeze(-1) * 10.0
+            output_reg, output_cls = model(data, mask, loc)
+            output_reg = output_reg.squeeze(-1)
 
-            val_loss.append(criterion(output, target).item())
-            pred_list.extend(output.tolist())
+            loss_mse = criterion(output_reg * 10.0, target)
+            loss_cls = F.cross_entropy(output_cls, target_CLS)
+
+            loss = loss_mse + loss_cls
+
+            val_loss.append(loss.item())
+            pred_list.extend((output_reg * 10).tolist())
             target_list.extend(target.tolist())
 
         val_loss = sum(val_loss) / len(val_loss)
@@ -201,7 +221,7 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=opt["batch_size"], shuffle=True, num_workers=opt["num_workers"])
     val_loader = DataLoader(val_dataset, batch_size=opt["batch_size"], shuffle=False, num_workers=opt["num_workers"])
 
-    model = AAM2(mask_num=opt['mask_num'], feat_num=opt['feat_num'], out_class=1)
+    model = AAM_MT(mask_num=opt['mask_num'], feat_num=opt['feat_num'])
     model.to(device)
 
     criterion = nn.MSELoss()  # it can be replaced by other loss function

@@ -115,8 +115,8 @@ class BBDataset(data.Dataset):
         self.mask_num = mask_num
         self.train_transformer = transforms.Compose(
             [
-                transforms.Resize((224, 224)),
-                transforms.RandomHorizontalFlip(),
+                transforms.Resize((299, 299)), # TODO: 299 -> 224, 299 is for inception_v3
+                # transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=mean, std=std),
             ]
@@ -124,7 +124,7 @@ class BBDataset(data.Dataset):
 
         self.test_transformer = transforms.Compose(
             [
-                transforms.Resize((224, 224)),
+                transforms.Resize((299, 299)), # TODO: 299 -> 224
                 transforms.ToTensor(),
                 transforms.Normalize(mean=mean, std=std),
             ]
@@ -163,6 +163,12 @@ class BBDataset(data.Dataset):
         mask_name = pic_path.replace('images', 'masks').replace('.jpg', '.npz')
 
         masks = np.load(mask_name)['masks']
+
+        # add random horizontal flip augmentation to masks and img
+        if not self.if_test:
+            if np.random.rand() > 0.5:
+                img = torch.flip(img, dims=[2])
+                masks = np.flip(masks, axis=2).copy()
 
         mask_loc = np.zeros((self.mask_num, 2))
         resized_masks = []

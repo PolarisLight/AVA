@@ -4,7 +4,6 @@ import numpy as np
 import cv2
 import torch
 import glob
-import sys
 import argparse
 import os
 

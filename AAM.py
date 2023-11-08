@@ -397,10 +397,11 @@ class AAM2(nn.Module):
         # self.feature_extractor = FCN(in_channel=3, out_channel=feat_num)
         self.feat_num = feat_num
         self.mask_num = mask_num
-        self.feature_extractor = FCN2(in_channel=mask_num, out_channel=feat_num, bias=False,
+        self.feature_extractor = FCN2(in_channel=mask_num, out_channel=feat_num, bias=True,
                                       groups=mask_num)
         self.cnn = torchvision.models.resnet50(pretrained=True)
         self.cnn.fc = nn.Sequential(
+            nn.Dropout(0.75),
             nn.Linear(2048, out_class),
             nn.Sigmoid() if out_class == 1 else nn.Softmax()
         )
@@ -410,10 +411,19 @@ class AAM2(nn.Module):
 
         self.gcn_projector = nn.Sequential(
             nn.Flatten(),
-            nn.Dropout(0.5),
+            nn.Dropout(0.75),
             nn.Linear(feat_num * mask_num, out_class, bias=False),
             nn.Sigmoid() if out_class == 1 else nn.Softmax()
         )
+        # initial feature extractor
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity="relu")
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm1d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
 
     def forward(self, imgs, masks, mask_loc):
         masked_img = imgs.unsqueeze(1) * masks.unsqueeze(2)  # 2,3,224,224 -> 2,30,3,224,224
@@ -449,6 +459,79 @@ class AAM2(nn.Module):
         pred = (gcn_pred + cnn_pred) / 2
 
         return pred
+
+
+class AAM_MT(nn.Module):
+    def __init__(self, mask_num=30, feat_num=64):
+        super(AAM_MT, self).__init__()
+        # self.feature_extractor = FCN(in_channel=3, out_channel=feat_num)
+        self.feat_num = feat_num
+        self.mask_num = mask_num
+        self.feature_extractor = FCN2(in_channel=mask_num, out_channel=feat_num, bias=True,
+                                      groups=mask_num)
+        self.cnn = torchvision.models.resnet50(pretrained=True)
+        self.cnn.fc = nn.Flatten()
+
+        self.GCN_layer1 = GraphConvLayer(dim_feature=feat_num)
+        self.GCN_layer2 = GraphConvLayer(dim_feature=feat_num)
+
+        self.projector_reg = nn.Sequential(
+            nn.Dropout(0.75),
+            nn.Linear(feat_num * mask_num + 2048, 1, bias=False),
+            nn.Sigmoid()
+        )
+        self.projector_cls = nn.Sequential(
+            nn.Dropout(0.75),
+            nn.Linear(feat_num * mask_num + 2048, 2, bias=False),
+            nn.Softmax(dim=1)
+        )
+        # initial feature extractor
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity="relu")
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm1d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+
+    def forward(self, imgs, masks, mask_loc):
+        masked_img = imgs.unsqueeze(1) * masks.unsqueeze(2)  # 2,3,224,224 -> 2,30,3,224,224
+        bs = masked_img.shape[0]
+        masked_img = torch.mean(masked_img, dim=2, keepdim=False)
+
+        feats = self.feature_extractor(masked_img)
+        feats = feats.reshape(bs, self.mask_num, -1, feats.shape[2],
+                              feats.shape[3])  # 2,30,64,28,28
+
+        pooled_features = F.adaptive_avg_pool2d(feats, (1, 1)).squeeze(-1).squeeze(-1)
+        # 将分割为mask_num组
+
+        # ============计算掩码空间关系============
+
+        batch_size, m, _ = mask_loc.size()
+
+        # 计算点之间的欧氏距离
+        # 首先扩展张量以进行广播计算
+        expanded_points1 = mask_loc.unsqueeze(2).expand(batch_size, m, m, 2)
+        expanded_points2 = mask_loc.unsqueeze(1).expand(batch_size, m, m, 2)
+
+        # 计算点之间的欧氏距离
+        A_spa = torch.norm(expanded_points1 - expanded_points2, dim=3)
+        A_spa = F.softmax(A_spa, dim=2)
+        # =====================================
+        gcn1 = self.GCN_layer1(pooled_features, A_spa)
+        gcn2 = self.GCN_layer2(gcn1, A_spa)
+
+        gcn2 = gcn2.view(gcn2.shape[0], -1)
+
+        cnn_pred = self.cnn(imgs)
+        mul_feat = torch.cat([gcn2, cnn_pred], dim=1)
+
+        reg_pred = self.projector_reg(mul_feat)
+        cls_pred = self.projector_cls(mul_feat)
+
+        return reg_pred, cls_pred
 
 
 class AAM_conv(nn.Module):
