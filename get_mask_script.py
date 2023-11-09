@@ -47,6 +47,11 @@ def get_img_masks(img_name):
     finally:
         pass
     # 假设array_masks是NumPy数组的列表
+    if masks is None:
+        with open(error_log, "a") as f:
+            f.write(img_name + "\n")
+        print(img_name + " is None")
+        return
     array_masks = [np.array(mask) for mask in array_masks]
 
     # 将列表中的数组转换为具有uint8数据类型的NumPy数组
