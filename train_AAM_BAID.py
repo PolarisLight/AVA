@@ -25,7 +25,7 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 arg = argparse.ArgumentParser()
-arg.add_argument("-n", "--task_name", required=False, default="AAM-M40-F64-BIAS-LR1e-5", type=str, help="task name")
+arg.add_argument("-n", "--task_name", required=False, default="AAM3-M40-F1024-LR1e-5", type=str, help="task name")
 arg.add_argument("-b", "--batch_size", required=False, default=64, type=int, help="batch size")
 arg.add_argument("-e", "--epochs", required=False, default=20, help="epochs")
 arg.add_argument("-lr", "--learning_rate", required=False, type=float, default=1e-5, help="learning rate")
@@ -35,8 +35,8 @@ arg.add_argument("-c", "--csv_dir", required=False, default="D:\\Dataset\\BAID\\
 arg.add_argument("-s", "--image_size", required=False, default=(224, 224), help="image size")
 arg.add_argument("-w", "--use_wandb", required=False, type=int, default=1, help="use wandb or not")
 arg.add_argument("-nw", "--num_workers", required=False, type=int, default=16, help="num_workers")
-arg.add_argument("-mn", "--mask_num", required=False, type=int, default=40, help="mask num")
-arg.add_argument("-fn", "--feat_num", required=False, type=int, default=64, help="feature num")
+arg.add_argument("-mn", "--mask_num", required=False, type=int, default=60, help="mask num")
+arg.add_argument("-fn", "--feat_num", required=False, type=int, default=1024, help="feature num")
 
 opt = vars(arg.parse_args())
 
@@ -195,13 +195,13 @@ def main():
     csv_dir = opt["csv_dir"]
 
     train_dataset = BBDataset(file_dir=csv_dir, img_dir=image_dir, type='train', test=False, mask_num=opt["mask_num"])
-    val_dataset = BBDataset(file_dir=csv_dir, img_dir=image_dir, type='validation', test=True,
+    val_dataset = BBDataset(file_dir=csv_dir, img_dir=image_dir, type='test', test=True,
                             mask_num=opt["mask_num"])
 
     train_loader = DataLoader(train_dataset, batch_size=opt["batch_size"], shuffle=True, num_workers=opt["num_workers"])
     val_loader = DataLoader(val_dataset, batch_size=opt["batch_size"], shuffle=False, num_workers=opt["num_workers"])
 
-    model = AAM2(mask_num=opt['mask_num'], feat_num=opt['feat_num'], out_class=1)
+    model = AAM3(mask_num=opt['mask_num'], feat_num=opt['feat_num'], out_class=1)
     model.to(device)
 
     criterion = nn.MSELoss()  # it can be replaced by other loss function

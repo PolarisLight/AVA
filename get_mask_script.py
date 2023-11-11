@@ -41,16 +41,17 @@ def get_img_masks(img_name):
             f.write(img_name + "\n")
         print(img_name + " masks is None")
         array_masks = np.zeros((1, img.shape[0], img.shape[1]))
-    try:
-        array_masks = []
-        for mask in masks:
-            mask["segmentation"] = [[1 if i else 0 for i in j] for j in mask["segmentation"]]
-            array_masks.append(mask["segmentation"])
-    except Exception as e:
-        print(e)
-        array_masks = np.zeros((1, img.shape[0], img.shape[1]))
-    finally:
-        pass
+    else:
+        try:
+            array_masks = []
+            for mask in masks:
+                mask["segmentation"] = [[1 if i else 0 for i in j] for j in mask["segmentation"]]
+                array_masks.append(mask["segmentation"])
+        except Exception as e:
+            print(e)
+            array_masks = np.zeros((1, img.shape[0], img.shape[1]))
+        finally:
+            pass
     # 假设array_masks是NumPy数组的列表
 
     array_masks = [np.array(mask) for mask in array_masks]
@@ -75,19 +76,19 @@ def get_img_masks(img_name):
 
 
 if __name__ == "__main__":
-    finished_list = glob.glob(save_root + "*.npz")
-    with tqdm.tqdm(total=len(img_files)) as pbar:
-        for i, img_file in enumerate(img_files):
-            img_name = os.path.basename(img_file)
-            name_without_format = img_name.split(".")[0]
-            if save_root + name_without_format + ".npz" in finished_list:
-                print(f"{img_name} has been processed")
-                pbar.update(1)
-                continue
-            pbar.set_description(f"Processing {img_name}")
-            get_img_masks(img_file)
-
-            pbar.update(1)
-            # if i > 1:
-            #     break
-
+    # finished_list = glob.glob(save_root + "*.npz")
+    # with tqdm.tqdm(total=len(img_files)) as pbar:
+    #     for i, img_file in enumerate(img_files):
+    #         img_name = os.path.basename(img_file)
+    #         name_without_format = img_name.split(".")[0]
+    #         if save_root + name_without_format + ".npz" in finished_list:
+    #             print(f"{img_name} has been processed")
+    #             pbar.update(1)
+    #             continue
+    #         pbar.set_description(f"Processing {img_name}")
+    #         get_img_masks(img_file)
+    #
+    #         pbar.update(1)
+    #         # if i > 1:
+    #         #     break
+    get_img_masks("F:/Dataset/AVA/images/427243.jpg")

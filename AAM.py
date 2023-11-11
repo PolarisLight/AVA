@@ -141,6 +141,41 @@ class UNet(nn.Module):
             return x1
 
 
+class MyCustomModel(nn.Module):
+    def __init__(self, num_classes=10):
+        super(MyCustomModel, self).__init__()
+        # 加载预训练的 ResNet50
+        self.resnet50 = torchvision.models.resnet50(pretrained=True)
+        self.resnet50.fc = nn.Sequential(
+            nn.Dropout(0.75),
+            nn.Linear(2048, num_classes),
+            nn.Sigmoid() if num_classes == 1 else nn.Softmax()
+        )
+        # 如果你不需要训练 ResNet50，可以设置为评估模式
+        # self.resnet50.eval()
+        # 可以移除原始的全连接层，如果你只需要中间特征
+        # self.resnet50.fc = nn.Identity()
+
+    def forward(self, x):
+        # 提取 layer4 的特征
+        x = self.resnet50.conv1(x)
+        x = self.resnet50.bn1(x)
+        x = self.resnet50.relu(x)
+        x = self.resnet50.maxpool(x)
+
+        x = self.resnet50.layer1(x)
+        x = self.resnet50.layer2(x)
+        intermediate_features = self.resnet50.layer3(x)
+        x = self.resnet50.layer4(intermediate_features)
+
+        # 继续前向传播获取分类结果
+        x = self.resnet50.avgpool(x)
+        x = torch.flatten(x, 1)
+        final_output = self.resnet50.fc(x)
+
+        return final_output, intermediate_features
+
+
 class FCN(nn.Module):
     def __init__(self, in_channel=3, out_channel=32, scale=4, bias=True, groups=1):
         super(FCN, self).__init__()
@@ -218,6 +253,41 @@ class FCN2(nn.Module):
         x = self.downsample4(x)  # 512,64,64 -> 512,32,32
 
         x = self.bridge(x)  # 512,32,32 -> out_channel,32,32
+        return x
+
+
+class FCN3(nn.Module):
+    """
+    Changeable scale FCN
+    """
+
+    def __init__(self, in_channel=3, out_channel=32, scale=4, bias=True, groups=1):
+        super(FCN3, self).__init__()
+        self.out_channel = out_channel
+        base_channel = 32
+        self.features = [base_channel * (2 ** i) for i in range(scale)]  # e.g., [32, 64, 128, 256, ...]
+
+        # Create input block
+        self.input_block = resconvblock(in_channel, self.features[0], bias=bias, groups=groups)
+
+        # Create downsample blocks and max pooling layers
+        self.down_blocks = nn.ModuleList()
+        self.downsamples = nn.ModuleList()
+        in_channels = [self.features[0]] + self.features[1:]
+        for i in range(1, scale):
+            self.down_blocks.append(resconvblock(in_channels[i - 1], self.features[i], bias=bias, groups=groups))
+            self.downsamples.append(nn.MaxPool2d(kernel_size=2, stride=2))
+
+        # Create the bridge block
+        self.bridge = resconvblock(self.features[-1], out_channel, bias=bias, groups=groups)
+
+    def forward(self, x):
+        x = self.input_block(x)
+        for i in range(len(self.down_blocks)):
+            x = self.down_blocks[i](x)
+            x = self.downsamples[i](x)
+
+        x = self.bridge(x)
         return x
 
 
@@ -461,7 +531,81 @@ class AAM2(nn.Module):
         return pred
 
 
+class AAM3(nn.Module):
+    def __init__(self, mask_num=30, feat_num=64, out_class=10):
+        super(AAM3, self).__init__()
+        # self.feature_extractor = FCN(in_channel=3, out_channel=feat_num)
+        self.feat_num = feat_num
+        self.mask_num = mask_num
+        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
+        # self.feature_extractor = FCN3(in_channel=3, out_channel=feat_num, bias=True, scale=4)
+        # self.cnn = torchvision.models.resnet50(pretrained=True)
+        # self.cnn.fc = nn.Sequential(
+        #     nn.Dropout(0.75),
+        #     nn.Linear(2048, out_class),
+        #     nn.Sigmoid() if out_class == 1 else nn.Softmax()
+        # )
+
+        self.feature_extractor = MyCustomModel(num_classes=1)
+
+        self.GCN_layer1 = GraphConvLayer(dim_feature=feat_num)
+        self.GCN_layer2 = GraphConvLayer(dim_feature=feat_num)
+
+        self.gcn_projector = nn.Sequential(
+            nn.Flatten(),
+            nn.Dropout(0.75),
+            nn.Linear(feat_num * mask_num, out_class, bias=False),
+            nn.Sigmoid() if out_class == 1 else nn.Softmax()
+        )
+        # initial feature extractor
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity="relu")
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm1d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+
+    def forward(self, imgs, masks, mask_loc):
+        cnn_pred, feats = self.feature_extractor(imgs)
+
+        for _ in range(4):
+            masks = F.max_pool2d(masks, kernel_size=2, stride=2)
+
+        masked_feats = feats.unsqueeze(1) * masks.unsqueeze(2)
+
+        pooled_features = F.adaptive_avg_pool2d(masked_feats, (1, 1)).squeeze(-1).squeeze(-1)
+        # 将分割为mask_num组
+
+        # ============计算掩码空间关系============
+
+        batch_size, m, _ = mask_loc.size()
+
+        # 计算点之间的欧氏距离
+        # 首先扩展张量以进行广播计算
+        expanded_points1 = mask_loc.unsqueeze(2).expand(batch_size, m, m, 2)
+        expanded_points2 = mask_loc.unsqueeze(1).expand(batch_size, m, m, 2)
+
+        # 计算点之间的欧氏距离
+        A_spa = torch.norm(expanded_points1 - expanded_points2, dim=3)
+        A_spa = F.softmax(A_spa, dim=2)
+        # =====================================
+        gcn1 = self.GCN_layer1(pooled_features, A_spa)
+        gcn2 = self.GCN_layer2(gcn1, A_spa)
+
+        gcn_pred = self.gcn_projector(gcn2)
+
+        pred = (gcn_pred + cnn_pred) / 2
+
+        return pred
+
+
 class AAM_MT(nn.Module):
+    """
+    multi-task AAM
+    """
+
     def __init__(self, mask_num=30, feat_num=64):
         super(AAM_MT, self).__init__()
         # self.feature_extractor = FCN(in_channel=3, out_channel=feat_num)
@@ -604,13 +748,13 @@ class AAM_attn(nn.Module):
         self.mask_num = mask_num
         self.feat_num = feat_num
         self.feature_extractor = FCN(in_channel=3, out_channel=feat_num)
-        self.mask_extractor = nn.Conv2d(mask_num, feat_num, kernel_size=1, stride=1, padding=0, bias=False)
+        self.mask_extractor = resconvblock(1, feat_num, bias=True)
         self.v = nn.Conv2d(feat_num, feat_num, kernel_size=1, stride=1, padding=0, bias=False)
 
         self.predictor = nn.Sequential(
             nn.Flatten(),
             nn.Dropout(0.5),
-            nn.Linear(1024 * 14 * 14, 2048, bias=False),
+            nn.Linear(1024 * (224 / (2 ** 4)) ** 2, 2048, bias=False),
             nn.ReLU(inplace=True),
             nn.Dropout(0.5),
             nn.Linear(2048, out_class),
@@ -619,10 +763,20 @@ class AAM_attn(nn.Module):
 
     def forward(self, imgs, masks, mask_loc):
         feats = self.feature_extractor(imgs)
-        masks = F.interpolate(masks, size=feats.size()[2:], mode="bilinear", align_corners=False)
-        masks = self.mask_extractor(masks)
 
-        attn = F.softmax(masks * feats / 32, dim=1)
+        # 创建一个形状为[1, feature_size, 1, 1]的权重tensor，用来乘以每个通道的下标
+        weights = torch.arange(1, self.feat_num + 1, dtype=masks.dtype, device=masks.device).view(1,
+                                                                                                  self.feat_num,
+                                                                                                  1, 1)
+
+        # 使用torch.sum和torch.mul计算每个通道的加权和
+        weighted_masks = torch.sum(torch.mul(masks, weights), dim=1, keepdim=True)
+        weighted_masks = F.sigmoid(weighted_masks)
+
+        weighted_masks = self.mask_extractor(weighted_masks)
+        weighted_masks = F.interpolate(weighted_masks, size=feats.size()[2:], mode="bilinear", align_corners=False)
+
+        attn = F.softmax(weighted_masks * feats / 32, dim=1)
         feats = self.v(feats * attn) + feats
 
         pred = self.predictor(feats)

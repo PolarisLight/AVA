@@ -25,7 +25,7 @@ def main():
         nn.Linear(model.fc.in_features, 1),
         nn.Sigmoid()
     )
-    model.load_state_dict(torch.load("saved_models\\nima-lr3e-5\\model_2.pth"))
+    model.load_state_dict(torch.load("saved_models\\nima-lr3e-5-inception\\model_0.pth"))
     model.cuda()
     model.eval()
     val_loss = []
@@ -68,4 +68,8 @@ def main():
 if __name__ == '__main__':
     main()
 
-
+# val_loss:0.9532391710748307, val_pearson:-0.0875440345020417, val_spearman:0.17274120359240422, val_acc:0.76203125
+# 1 val_loss:0.39264276027176187, val_pearson:0.23722869293553933, val_spearman:0.2526819406123867, val_acc:0.7615625
+# 2(测试最优） val_loss:0.5248460377552718, val_pearson:0.13010489325185187, val_spearman:0.13780586009610749, val_acc:0.75296875
+# 20 val_loss:1.3258017045767991, val_pearson:0.047521662979604196, val_spearman:0.06079522103347232, val_acc:0.71265625
+# 3 val_loss:0.8495508854338252, val_pearson:0.10130378727709335, val_spearman:0.09147038223993671, val_acc:0.73484375

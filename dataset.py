@@ -115,7 +115,7 @@ class BBDataset(data.Dataset):
         self.mask_num = mask_num
         self.train_transformer = transforms.Compose(
             [
-                transforms.Resize((299, 299)), # TODO: 299 -> 224, 299 is for inception_v3
+                transforms.Resize((224, 224)),
                 # transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=mean, std=std),
@@ -124,7 +124,7 @@ class BBDataset(data.Dataset):
 
         self.test_transformer = transforms.Compose(
             [
-                transforms.Resize((299, 299)), # TODO: 299 -> 224
+                transforms.Resize((224, 224)),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=mean, std=std),
             ]
