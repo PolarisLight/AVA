@@ -33,7 +33,7 @@ arg.add_argument("-m", "--model_saved_path", required=False, default="saved_mode
 arg.add_argument("-d", "--image_dir", required=False, default="D:\\Dataset\\AVA\\images", help="image dir")
 arg.add_argument("-c", "--csv_dir", required=False, default="D:\\Dataset\\AVA\\labels", help="csv dir")
 arg.add_argument("-s", "--image_size", required=False, default=(224, 224), help="image size")
-arg.add_argument("-w", "--use_wandb", required=False, type=int, default=1, help="use wandb or not")
+arg.add_argument("-w", "--use_wandb", required=False, type=int, default=10, help="use wandb or not")
 arg.add_argument("-nw", "--num_workers", required=False, type=int, default=8, help="num_workers")
 arg.add_argument("-mn", "--mask_num", required=False, type=int, default=40, help="mask num")
 arg.add_argument("-fn", "--feat_num", required=False, type=int, default=512, help="feature num")
@@ -194,9 +194,9 @@ def main():
     train_csv = os.path.join(csv_dir, "train_labels.csv")
     val_csv = os.path.join(csv_dir, "val_labels.csv")
 
-    train_dataset = AVADatasetSAM(csv_file=train_csv, root_dir=image_dir, mask_num=30,
+    train_dataset = AVADatasetSAM(csv_file=train_csv, root_dir=image_dir, mask_num=opt["mask_num"],
                                   imgsz=224, if_test=False, transform=True)
-    val_dataset = AVADatasetSAM(csv_file=val_csv, root_dir=image_dir, mask_num=30,
+    val_dataset = AVADatasetSAM(csv_file=val_csv, root_dir=image_dir, mask_num=opt["mask_num"],
                                 imgsz=224, if_test=True, transform=True)
 
     train_loader = DataLoader(train_dataset, batch_size=opt["batch_size"], shuffle=True, num_workers=opt["num_workers"])
