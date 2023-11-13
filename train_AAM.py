@@ -13,9 +13,9 @@ from sklearn.metrics import accuracy_score
 import tqdm
 import wandb  # wandb is a tool for visualizing the training process, please refer to https://wandb.ai/site
 
-from dataset import AVADatasetFastSAM, train_transform, val_transform
+from dataset import AVADatasetSAM, train_transform, val_transform
 from utils import EMD_loss, dis_2_score
-from AAM import AAM
+from AAM import AAM3
 
 # this is for solving the problem of "OMP: Error #15: Initializing libiomp5.dylib,
 # but found libiomp5.dylib already initialized."
@@ -25,18 +25,18 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 arg = argparse.ArgumentParser()
-arg.add_argument("-n", "--task_name", required=False, default="AAM", type=str, help="task name")
-arg.add_argument("-b", "--batch_size", required=False, default=32, type=int, help="batch size")
-arg.add_argument("-e", "--epochs", required=False, default=20, help="epochs")
-arg.add_argument("-lr", "--learning_rate", required=False, type=float, default=1e-4, help="learning rate")
+arg.add_argument("-n", "--task_name", required=False, default="AAM3-M40-F512-LR3e-5", type=str, help="task name")
+arg.add_argument("-b", "--batch_size", required=False, default=64, type=int, help="batch size")
+arg.add_argument("-e", "--epochs", required=False, default=30, help="epochs")
+arg.add_argument("-lr", "--learning_rate", required=False, type=float, default=3e-5, help="learning rate")
 arg.add_argument("-m", "--model_saved_path", required=False, default="saved_models", help="model saved path")
-arg.add_argument("-d", "--image_dir", required=False, default="dataset/images", help="image dir")
-arg.add_argument("-c", "--csv_dir", required=False, default="dataset/labels", help="csv dir")
-arg.add_argument("-t", "--train_csv", required=False, default="train_labels.csv", help="train csv")
-arg.add_argument("-v", "--val_csv", required=False, default="val_labels.csv", help="val csv")
+arg.add_argument("-d", "--image_dir", required=False, default="D:\\Dataset\\AVA\\images", help="image dir")
+arg.add_argument("-c", "--csv_dir", required=False, default="D:\\Dataset\\AVA\\labels", help="csv dir")
 arg.add_argument("-s", "--image_size", required=False, default=(224, 224), help="image size")
 arg.add_argument("-w", "--use_wandb", required=False, type=int, default=1, help="use wandb or not")
-arg.add_argument("-nw", "--num_workers", required=False, type=int, default=0, help="num_workers")
+arg.add_argument("-nw", "--num_workers", required=False, type=int, default=8, help="num_workers")
+arg.add_argument("-mn", "--mask_num", required=False, type=int, default=40, help="mask num")
+arg.add_argument("-fn", "--feat_num", required=False, type=int, default=512, help="feature num")
 
 opt = vars(arg.parse_args())
 
@@ -58,11 +58,6 @@ else:
     device = torch.device('cpu')
     opt["use_wandb"] = 0
     print('Using device:cpu')
-
-# show options formally
-print("Options:")
-for k, v in opt.items():
-    print("\t{}: {}".format(k, v))
 
 
 def learning_rate_decay(optimizer, epoch, decay_rate=0.1, decay_epoch=5):
@@ -105,8 +100,9 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
             for batch_idx, datas in enumerate(train_loader):
                 data, target, mask = datas["image"].to(device), datas["annotations"].to(device), datas["masks"].to(
                     device)
+                mask_loc = datas["mask_loc"].to(device)
                 optimizer.zero_grad()
-                output = model(data, mask)
+                output = model(data, mask, mask_loc)
                 loss = criterion(output, target)
                 if not opt["use_wandb"]:
                     print()
@@ -152,7 +148,8 @@ def validate(model, val_loader, criterion):
     with torch.no_grad():
         for datas in tqdm.tqdm(val_loader):
             data, target, mask = datas["image"].to(device), datas["annotations"].to(device), datas["masks"].to(device)
-            output = model(data, mask)
+            mask_loc = datas["mask_loc"].to(device)
+            output = model(data, mask, mask_loc)
             val_loss.append(criterion(output, target).item())
             pred_list.append(output)
             target_list.append(target)
@@ -184,23 +181,28 @@ def validate(model, val_loader, criterion):
 
 
 def main():
+    # show options formally
+    print("Options:")
+    for k, v in opt.items():
+        print("\t{}: {}".format(k, v))
     """
     main function
     :return:
     """
     image_dir = opt["image_dir"]
     csv_dir = opt["csv_dir"]
-    train_csv = os.path.join(csv_dir, opt["train_csv"])
-    val_csv = os.path.join(csv_dir, opt["val_csv"])
+    train_csv = os.path.join(csv_dir, "train_labels.csv")
+    val_csv = os.path.join(csv_dir, "val_labels.csv")
 
-    train_dataset = AVADatasetFastSAM(csv_file=train_csv, root_dir=image_dir, transform=train_transform, mask_num=30,
-                               imgsz=224)
-    val_dataset = AVADatasetFastSAM(csv_file=val_csv, root_dir=image_dir, transform=val_transform, mask_num=30, imgsz=224)
+    train_dataset = AVADatasetSAM(csv_file=train_csv, root_dir=image_dir, mask_num=30,
+                                  imgsz=224, if_test=False, transform=True)
+    val_dataset = AVADatasetSAM(csv_file=val_csv, root_dir=image_dir, mask_num=30,
+                                imgsz=224, if_test=True, transform=True)
 
     train_loader = DataLoader(train_dataset, batch_size=opt["batch_size"], shuffle=True, num_workers=opt["num_workers"])
     val_loader = DataLoader(val_dataset, batch_size=opt["batch_size"], shuffle=False, num_workers=opt["num_workers"])
 
-    model = AAM(mask_num=30, feat_num=128)
+    model = AAM3(mask_num=opt["mask_num"], feat_num=opt["feat_num"])
     model.to(device)
 
     criterion = EMD_loss()  # it can be replaced by other loss function

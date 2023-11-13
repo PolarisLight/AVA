@@ -300,7 +300,7 @@ class GraphConvLayer(nn.Module):
 
         self.GCN_W = nn.Parameter(torch.FloatTensor(dim_feature, dim_feature))
         # self.GCN_B = nn.Parameter(torch.FloatTensor(dim_feature))
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.GELU()
         self.initialize()
 
     def initialize(self):
@@ -546,7 +546,8 @@ class AAM3(nn.Module):
         #     nn.Sigmoid() if out_class == 1 else nn.Softmax()
         # )
 
-        self.feature_extractor = MyCustomModel(num_classes=1)
+        self.feature_extractor = MyCustomModel(num_classes=out_class)
+        self.conv1x1 = nn.Conv2d(1024, feat_num, kernel_size=1, stride=1, padding=0)
 
         self.GCN_layer1 = GraphConvLayer(dim_feature=feat_num)
         self.GCN_layer2 = GraphConvLayer(dim_feature=feat_num)
@@ -554,7 +555,7 @@ class AAM3(nn.Module):
         self.gcn_projector = nn.Sequential(
             nn.Flatten(),
             nn.Dropout(0.75),
-            nn.Linear(feat_num * mask_num, out_class, bias=False),
+            nn.Linear(feat_num * mask_num, out_class),
             nn.Sigmoid() if out_class == 1 else nn.Softmax()
         )
         # initial feature extractor
@@ -569,6 +570,7 @@ class AAM3(nn.Module):
 
     def forward(self, imgs, masks, mask_loc):
         cnn_pred, feats = self.feature_extractor(imgs)
+        feats = self.conv1x1(feats)
 
         for _ in range(4):
             masks = F.max_pool2d(masks, kernel_size=2, stride=2)
@@ -596,8 +598,9 @@ class AAM3(nn.Module):
 
         gcn_pred = self.gcn_projector(gcn2)
 
-        pred = (gcn_pred + cnn_pred) / 2
-
+        # print(f"GCN: {gcn_pred[0].detach().cpu().numpy()}, CNN: {cnn_pred[0].detach().cpu().numpy()}")
+        pred = (gcn_pred+cnn_pred)/2
+        pred = gcn_pred
         return pred
 
 

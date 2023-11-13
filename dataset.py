@@ -30,7 +30,7 @@ train_transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Resize((224, 224)),
     # transforms.RandomCrop(448),
-    transforms.RandomHorizontalFlip(),
+    # transforms.RandomHorizontalFlip(),
 
     transforms.Normalize(mean=[0.485, 0.456, 0.406],
                          std=[0.229, 0.224, 0.225])
@@ -105,6 +105,89 @@ class AVADatasetFastSAM(data.Dataset):
         if self.transform:
             sample['image'] = self.transform(sample['image'])
             # print(sample['image'].shape)
+
+        return sample
+
+
+class AVADatasetSAM(data.Dataset):
+    """AVA dataset
+
+    Args:
+        csv_file: a 11-column csv_file, column one contains the names of image files, column 2-11 contains the empiricial distributions of ratings
+        root_dir: directory to the images
+        transform: preprocessing and augmentation of the training images
+    """
+
+    def __init__(self, csv_file, root_dir, transform=None, imgsz=512, mask_num=30, mask=True, device='cpu',
+                 if_test=False):
+        super(AVADatasetSAM, self).__init__()
+        self.annotations = pd.read_csv(csv_file)
+        self.root_dir = root_dir
+        self.transform = transform
+        self.mask = mask
+        self.device = device
+        self.imgsz = imgsz
+        self.mask_num = mask_num
+        self.if_test = if_test
+        self.transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Resize((224, 224)),
+            # transforms.RandomCrop(448),
+            # transforms.RandomHorizontalFlip(),
+
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225])
+        ])
+
+    def __len__(self):
+        return len(self.annotations)
+
+    def __getitem__(self, idx):
+        img_name = os.path.join(self.root_dir, str(self.annotations.iloc[idx, 0]) + '.jpg')
+
+        img = Image.open(img_name).convert('RGB')
+
+        img = self.transform(img)
+        #
+        mask_name = img_name.replace('images', 'masks').replace('.jpg', '.npz')
+
+        masks = np.load(mask_name)['masks']
+
+        # add random horizontal flip augmentation to masks and img
+        if not self.if_test:
+            if np.random.rand() > 0.5:
+                img = torch.flip(img, dims=[2])
+                masks = np.flip(masks, axis=2).copy()
+
+        mask_loc = np.zeros((self.mask_num, 2))
+        resized_masks = []
+        for i, mask in enumerate(masks):
+            if i >= self.mask_num:
+                break
+            mask = np.array(mask, dtype=np.uint8)
+            M = cv2.moments(mask)
+            centroid_x = int(M["m10"] / (M["m00"] + 1e-6))
+            centroid_y = int(M["m01"] / (M["m00"] + 1e-6))
+            mask_loc[i] = [centroid_x, centroid_y]
+            mask = cv2.resize(mask, (224, 224), interpolation=cv2.INTER_NEAREST)
+            mask = np.array(mask, dtype=np.float32)
+            resized_masks.append(mask)
+
+        if len(resized_masks) < self.mask_num:
+            resized_masks = resized_masks + [np.zeros((224, 224), dtype=np.float32)] * (
+                    self.mask_num - len(resized_masks))
+            mask_loc = np.concatenate((mask_loc, np.zeros((self.mask_num - len(mask_loc), 2))))
+        else:
+            resized_masks = resized_masks[:self.mask_num]
+            mask_loc = mask_loc[:self.mask_num]
+
+        resized_masks = torch.from_numpy(np.array(resized_masks))
+        mask_loc = torch.from_numpy(np.array(mask_loc).astype(np.float32))
+
+        annotations = self.annotations.iloc[idx, 1:].to_numpy()
+        annotations = annotations.astype('float').reshape(-1, )
+        sample = {'img_id': img_name, 'image': img, 'annotations': annotations, 'masks': resized_masks,
+                  'mask_loc': mask_loc}
 
         return sample
 
