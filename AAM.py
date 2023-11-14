@@ -173,7 +173,7 @@ class MyCustomModel(nn.Module):
         x = torch.flatten(x, 1)
         final_output = self.resnet50.fc(x)
 
-        return final_output, intermediate_features
+        return final_output, intermediate_features.detach()
 
 
 class FCN(nn.Module):
@@ -532,20 +532,13 @@ class AAM2(nn.Module):
 
 
 class AAM3(nn.Module):
-    def __init__(self, mask_num=30, feat_num=64, out_class=10,use_subnet="both"):
+    def __init__(self, mask_num=30, feat_num=64, out_class=10, use_subnet="both"):
         super(AAM3, self).__init__()
         # self.feature_extractor = FCN(in_channel=3, out_channel=feat_num)
         self.feat_num = feat_num
         self.mask_num = mask_num
         self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.use_subnet = use_subnet
-        # self.feature_extractor = FCN3(in_channel=3, out_channel=feat_num, bias=True, scale=4)
-        # self.cnn = torchvision.models.resnet50(pretrained=True)
-        # self.cnn.fc = nn.Sequential(
-        #     nn.Dropout(0.75),
-        #     nn.Linear(2048, out_class),
-        #     nn.Sigmoid() if out_class == 1 else nn.Softmax()
-        # )
 
         self.feature_extractor = MyCustomModel(num_classes=out_class)
         self.conv1x1 = nn.Conv2d(1024, feat_num, kernel_size=1, stride=1, padding=0)
@@ -559,15 +552,15 @@ class AAM3(nn.Module):
             nn.Linear(feat_num * mask_num, out_class),
             nn.Sigmoid() if out_class == 1 else nn.Softmax(dim=1)
         )
-        # initial feature extractor
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity="relu")
-                if m.bias is not None:
-                    nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm1d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
+        # # initial feature extractor
+        # for m in self.modules():
+        #     if isinstance(m, nn.Conv2d):
+        #         nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity="relu")
+        #         if m.bias is not None:
+        #             nn.init.constant_(m.bias, 0)
+        #     elif isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm1d):
+        #         nn.init.constant_(m.weight, 1)
+        #         nn.init.constant_(m.bias, 0)
 
     def forward(self, imgs, masks, mask_loc):
         cnn_pred, feats = self.feature_extractor(imgs)
@@ -608,6 +601,99 @@ class AAM3(nn.Module):
             pred = (gcn_pred + cnn_pred) / 2
         else:
             raise ValueError("use_subnet should be one of ['gcn', 'cnn', 'both']")
+        return pred
+
+
+class AAM4(nn.Module):
+    def __init__(self, mask_num=30, feat_num=64, out_class=10, use_subnet="both"):
+        super(AAM4, self).__init__()
+        # self.feature_extractor = FCN(in_channel=3, out_channel=feat_num)
+        self.feat_num = feat_num
+        self.mask_num = mask_num
+        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.use_subnet = use_subnet
+        # self.feature_extractor = FCN3(in_channel=3, out_channel=feat_num, bias=True, scale=4)
+        # self.cnn = torchvision.models.resnet50(pretrained=True)
+        # self.cnn.fc = nn.Sequential(
+        #     nn.Dropout(0.75),
+        #     nn.Linear(2048, out_class),
+        #     nn.Sigmoid() if out_class == 1 else nn.Softmax()
+        # )
+
+        self.feature_extractor = torchvision.models.resnet50(pretrained=True)
+        self.feature_extractor.fc = nn.Sequential(
+            nn.Dropout(0.75),
+            nn.Linear(self.feature_extractor.fc.in_features, out_class),
+            nn.Softmax(dim=1) if out_class > 1 else nn.Sigmoid()
+        )
+        self.hook = self.feature_extractor.layer3.register_forward_hook(self.get_layer3_features)
+        self.features = {}
+        self.conv1x1 = nn.Conv2d(1024, feat_num, kernel_size=1, stride=1, padding=0)
+
+        self.GCN_layer1 = GraphConvLayer(dim_feature=feat_num)
+        self.GCN_layer2 = GraphConvLayer(dim_feature=feat_num)
+
+        self.gcn_projector = nn.Sequential(
+            nn.Flatten(),
+            nn.Dropout(0.75),
+            nn.Linear(feat_num * mask_num, out_class),
+            nn.Sigmoid() if out_class == 1 else nn.Softmax(dim=1)
+        )
+        # initial feature extractor
+        # for m in self.modules():
+        #     if isinstance(m, nn.Conv2d):
+        #         nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity="relu")
+        #         if m.bias is not None:
+        #             nn.init.constant_(m.bias, 0)
+        #     elif isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm1d):
+        #         nn.init.constant_(m.weight, 1)
+        #         nn.init.constant_(m.bias, 0)
+
+    def get_layer3_features(self, module, input, output):
+        # 将 layer3 的输出存储到类的特征字典中
+        self.features['layer3'] = output.detach()
+
+    def forward(self, imgs, masks, mask_loc):
+        cnn_pred = self.feature_extractor(imgs)
+
+        # feats = self.conv1x1(self.features['layer3'])
+        #
+        # for _ in range(4):
+        #     masks = F.max_pool2d(masks, kernel_size=2, stride=2)
+        #
+        # masked_feats = feats.unsqueeze(1) * masks.unsqueeze(2)
+        #
+        # pooled_features = F.adaptive_avg_pool2d(masked_feats, (1, 1)).squeeze(-1).squeeze(-1)
+        # # 将分割为mask_num组
+        #
+        # # ============计算掩码空间关系============
+        #
+        # batch_size, m, _ = mask_loc.size()
+        #
+        # # 计算点之间的欧氏距离
+        # # 首先扩展张量以进行广播计算
+        # expanded_points1 = mask_loc.unsqueeze(2).expand(batch_size, m, m, 2)
+        # expanded_points2 = mask_loc.unsqueeze(1).expand(batch_size, m, m, 2)
+        #
+        # # 计算点之间的欧氏距离
+        # A_spa = torch.norm(expanded_points1 - expanded_points2, dim=3)
+        # A_spa = F.softmax(A_spa, dim=2)
+        # # =====================================
+        # gcn1 = self.GCN_layer1(pooled_features, A_spa)
+        # gcn2 = self.GCN_layer2(gcn1, A_spa)
+        #
+        # gcn_pred = self.gcn_projector(gcn2)
+        #
+        # # print(f"GCN: {gcn_pred[0].detach().cpu().numpy()}, CNN: {cnn_pred[0].detach().cpu().numpy()}")
+        # if self.use_subnet == "gcn":
+        #     pred = gcn_pred
+        # elif self.use_subnet == "cnn":
+        #     pred = cnn_pred
+        # elif self.use_subnet == "both":
+        #     pred = (gcn_pred + cnn_pred) / 2
+        # else:
+        #     raise ValueError("use_subnet should be one of ['gcn', 'cnn', 'both']")
+        pred = cnn_pred
         return pred
 
 
@@ -757,7 +843,7 @@ class AAM_attn(nn.Module):
         # self.feature_extractor = FCN(in_channel=3, out_channel=feat_num)
         self.mask_num = mask_num
         self.feat_num = feat_num
-        self.feature_extractor = FCN(in_channel=3, out_channel=feat_num)
+        self.feature_extractor = torchvision.models.resnet50(pretrained=True)
         self.mask_extractor = resconvblock(1, feat_num, bias=True)
         self.v = nn.Conv2d(feat_num, feat_num, kernel_size=1, stride=1, padding=0, bias=False)
 
@@ -821,43 +907,9 @@ class AAM_VIT(nn.Module):
         x = self.vit.norm(x)
         return self.vit.heads(x[:, 0])
 
-if __name__ == "__main__":
-    from dataset import AVADataset, train_transform
-    from torch.utils.data import DataLoader
-    from utils import EMD_loss
 
+if __name__ == "__main__":
     image_dir = "dataset/images"
     train_csv = "dataset/labels/train_labels.csv"
 
-    model = AAM()
-
-    if torch.cuda.is_available():
-        device = "cuda"
-    elif torch.backends.mps.is_available():
-        device = "mps"
-    else:
-        device = "cpu"
-    device = "cpu"
-
-    model.to(device)
-
-    dataset = AVADataset(csv_file=train_csv, root_dir=image_dir, transform=train_transform)
-    dataloader = DataLoader(dataset, batch_size=2, shuffle=False, num_workers=0)
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    criterion = EMD_loss()
-
-    for i, data in enumerate(tqdm.tqdm(dataloader)):
-        imgs, labels, masks = data["image"], data["annotations"], data["masks"]
-        imgs = imgs.to(device)
-        masks = masks.to(device)
-        # labels = labels.to(device)
-
-        y = model(imgs, masks)
-        loss = criterion(y, labels)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        if i > 10:
-            break
+    model = MyCustomModel(num_classes=10)

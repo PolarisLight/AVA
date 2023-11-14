@@ -25,10 +25,10 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 arg = argparse.ArgumentParser()
-arg.add_argument("-n", "--task_name", required=False, default="AAM3-M40-F512-LR1e-4", type=str, help="task name")
+arg.add_argument("-n", "--task_name", required=False, default="AAM4-CNN-LR3e-6", type=str, help="task name")
 arg.add_argument("-b", "--batch_size", required=False, default=64, type=int, help="batch size")
 arg.add_argument("-e", "--epochs", required=False, default=30, help="epochs")
-arg.add_argument("-lr", "--learning_rate", required=False, type=float, default=3e-5, help="learning rate")
+arg.add_argument("-lr", "--learning_rate", required=False, type=float, default=3e-6, help="learning rate")
 arg.add_argument("-m", "--model_saved_path", required=False, default="saved_models", help="model saved path")
 arg.add_argument("-d", "--image_dir", required=False, default="D:\\Dataset\\AVA\\images", help="image dir")
 arg.add_argument("-c", "--csv_dir", required=False, default="D:\\Dataset\\AVA\\labels", help="csv dir")
@@ -37,7 +37,7 @@ arg.add_argument("-w", "--use_wandb", required=False, type=int, default=1, help=
 arg.add_argument("-nw", "--num_workers", required=False, type=int, default=8, help="num_workers")
 arg.add_argument("-mn", "--mask_num", required=False, type=int, default=40, help="mask num")
 arg.add_argument("-fn", "--feat_num", required=False, type=int, default=512, help="feature num")
-arg.add_argument("-sn", "--use_subnet", required=False, type=str, default="both", help="use subnet:cnn, gcn, both")
+arg.add_argument("-sn", "--use_subnet", required=False, type=str, default="cnn", help="use subnet:cnn, gcn, both")
 
 opt = vars(arg.parse_args())
 
