@@ -557,7 +557,7 @@ class AAM3(nn.Module):
             nn.Flatten(),
             nn.Dropout(0.75),
             nn.Linear(feat_num * mask_num, out_class),
-            nn.Sigmoid() if out_class == 1 else nn.Softmax()
+            nn.Sigmoid() if out_class == 1 else nn.Softmax(dim=1)
         )
         # initial feature extractor
         for m in self.modules():
@@ -775,8 +775,8 @@ class AAM_attn(nn.Module):
         feats = self.feature_extractor(imgs)
 
         # 创建一个形状为[1, feature_size, 1, 1]的权重tensor，用来乘以每个通道的下标
-        weights = torch.arange(1, self.feat_num + 1, dtype=masks.dtype, device=masks.device).view(1,
-                                                                                                  self.feat_num,
+        weights = torch.arange(1, self.mask_num + 1, dtype=masks.dtype, device=masks.device).view(1,
+                                                                                                  self.mask_num,
                                                                                                   1, 1)
 
         # 使用torch.sum和torch.mul计算每个通道的加权和

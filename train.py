@@ -197,8 +197,8 @@ def main():
     train_dataset = AVADatasetSAM(csv_file=train_csv, root_dir=image_dir, transform=train_transform, mask=False)
     val_dataset = AVADatasetSAM(csv_file=val_csv, root_dir=image_dir, transform=val_transform, mask=False)
 
-    train_loader = DataLoader(train_dataset, batch_size=opt["batch_size"], shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=opt["batch_size"], shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=opt["batch_size"], shuffle=True, num_workers=8)
+    val_loader = DataLoader(val_dataset, batch_size=opt["batch_size"], shuffle=False, num_workers=8)
 
     model = torchvision.models.resnet50(pretrained=opt["with_pretrained"])
     model.fc = nn.Sequential(
@@ -209,7 +209,7 @@ def main():
     model.to(device)
 
     criterion = EMD_loss()  # it can be replaced by other loss function
-    optimizer = optim.Adam(model.parameters(), lr=opt["learning_rate"],betas=(0.9, 0.9))
+    optimizer = optim.Adam(model.parameters(), lr=opt["learning_rate"], betas=(0.9, 0.9))
 
     # you can use wandb to log your training process
     # if not, just set use_wandb to False
