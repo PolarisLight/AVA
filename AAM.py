@@ -532,12 +532,13 @@ class AAM2(nn.Module):
 
 
 class AAM3(nn.Module):
-    def __init__(self, mask_num=30, feat_num=64, out_class=10):
+    def __init__(self, mask_num=30, feat_num=64, out_class=10,use_subnet="both"):
         super(AAM3, self).__init__()
         # self.feature_extractor = FCN(in_channel=3, out_channel=feat_num)
         self.feat_num = feat_num
         self.mask_num = mask_num
         self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.use_net = use_subnet
         # self.feature_extractor = FCN3(in_channel=3, out_channel=feat_num, bias=True, scale=4)
         # self.cnn = torchvision.models.resnet50(pretrained=True)
         # self.cnn.fc = nn.Sequential(
@@ -599,8 +600,14 @@ class AAM3(nn.Module):
         gcn_pred = self.gcn_projector(gcn2)
 
         # print(f"GCN: {gcn_pred[0].detach().cpu().numpy()}, CNN: {cnn_pred[0].detach().cpu().numpy()}")
-        pred = (gcn_pred+cnn_pred)/2
-        pred = gcn_pred
+        if self.use_subnet == "gcn":
+            pred = gcn_pred
+        elif self.use_subnet == "cnn":
+            pred = cnn_pred
+        elif self.use_subnet == "both":
+            pred = (gcn_pred + cnn_pred) / 2
+        else:
+            raise ValueError("use_subnet should be one of ['gcn', 'cnn', 'both']")
         return pred
 
 
@@ -786,6 +793,33 @@ class AAM_attn(nn.Module):
 
         return pred
 
+
+class AAM_VIT(nn.Module):
+    def __init__(self, num_patches=30, num_classes=1000):
+        super(AAM_VIT, self).__init__()
+
+        self.vit = torchvision.models.vit_b_16(weights=torchvision.models.ViT_B_16_Weights.DEFAULT)
+
+        # 修改位置嵌入以匹配patch的数量
+        self.vit.pos_embed = nn.Parameter(torch.randn(1, num_patches + 1, self.vit.embed_dim))
+
+        # 修改分类头
+        self.vit.heads = nn.Linear(self.vit.embed_dim, num_classes)
+
+    def forward(self, x):
+        # 调整x的形状以适应ViT的输入要求
+        # 假设x的形状为[bs, num_patches, channels, height, width]
+        bs, num_patches, channels, height, width = x.shape
+        x = x.view(bs, num_patches, -1)  # 调整形状为[bs, num_patches, channels*height*width]
+
+        # 进行位置编码
+        pos_embed = self.vit.pos_embed.expand(bs, -1, -1)  # 扩展位置嵌入以匹配batch size
+        x = torch.cat([self.vit.cls_token.expand(bs, -1, -1), x], dim=1) + pos_embed
+
+        # 通过ViT的其余部分进行前向传播
+        x = self.vit.transformer(x)
+        x = self.vit.norm(x)
+        return self.vit.heads(x[:, 0])
 
 if __name__ == "__main__":
     from dataset import AVADataset, train_transform

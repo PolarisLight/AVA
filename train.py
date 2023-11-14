@@ -13,7 +13,7 @@ from sklearn.metrics import accuracy_score
 import tqdm
 import wandb  # wandb is a tool for visualizing the training process, please refer to https://wandb.ai/site
 
-from dataset import AVADataset, train_transform, val_transform
+from dataset import AVADatasetSAM, train_transform, val_transform
 from utils import EMD_loss, dis_2_score
 
 # this is for solving the problem of "OMP: Error #15: Initializing libiomp5.dylib,
@@ -194,8 +194,8 @@ def main():
     train_csv = os.path.join(csv_dir, opt["train_csv"])
     val_csv = os.path.join(csv_dir, opt["val_csv"])
 
-    train_dataset = AVADataset(csv_file=train_csv, root_dir=image_dir, transform=train_transform, mask=False)
-    val_dataset = AVADataset(csv_file=val_csv, root_dir=image_dir, transform=val_transform, mask=False)
+    train_dataset = AVADatasetSAM(csv_file=train_csv, root_dir=image_dir, transform=train_transform, mask=False)
+    val_dataset = AVADatasetSAM(csv_file=val_csv, root_dir=image_dir, transform=val_transform, mask=False)
 
     train_loader = DataLoader(train_dataset, batch_size=opt["batch_size"], shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=opt["batch_size"], shuffle=False)
