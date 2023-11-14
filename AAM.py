@@ -538,7 +538,7 @@ class AAM3(nn.Module):
         self.feat_num = feat_num
         self.mask_num = mask_num
         self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.use_net = use_subnet
+        self.use_subnet = use_subnet
         # self.feature_extractor = FCN3(in_channel=3, out_channel=feat_num, bias=True, scale=4)
         # self.cnn = torchvision.models.resnet50(pretrained=True)
         # self.cnn.fc = nn.Sequential(
