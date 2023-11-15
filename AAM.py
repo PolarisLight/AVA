@@ -607,13 +607,14 @@ class AAM3(nn.Module):
 
 
 class AAM4(nn.Module):
-    def __init__(self, mask_num=30, feat_num=64, out_class=10, use_subnet="both", feat_scale=3):
+    def __init__(self, mask_num=30, feat_num=64, out_class=10, use_subnet="both", feat_scale=3,freeze_feat=True):
         super(AAM4, self).__init__()
         self.feat_num = feat_num
         self.mask_num = mask_num
         self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.use_subnet = use_subnet
         self.feat_scale = feat_scale
+        self.freeze_feat = freeze_feat
 
         self.feature_extractor = torchvision.models.resnet50(pretrained=True)
         self.feature_extractor.fc = nn.Sequential(
@@ -658,7 +659,10 @@ class AAM4(nn.Module):
         cnn_pred = self.feature_extractor(imgs)
 
         feat_layer = "layer" + str(self.feat_scale)
-        feats = self.features[feat_layer].detach()
+        if self.freeze_feat:
+            feats = self.features[feat_layer].detach()
+        else:
+            feats = self.features[feat_layer]
 
         if feats.shape[1] != self.feat_num:
             feats = self.conv1x1(feats)
