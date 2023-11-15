@@ -15,7 +15,7 @@ import wandb  # wandb is a tool for visualizing the training process, please ref
 
 from dataset import AVADatasetSAM, train_transform, val_transform
 from utils import EMD_loss, dis_2_score
-from AAM import AAM3,AAM4
+from AAM import AAM3, AAM4
 
 # this is for solving the problem of "OMP: Error #15: Initializing libiomp5.dylib,
 # but found libiomp5.dylib already initialized."
@@ -36,8 +36,9 @@ arg.add_argument("-s", "--image_size", required=False, default=(224, 224), help=
 arg.add_argument("-w", "--use_wandb", required=False, type=int, default=1, help="use wandb or not")
 arg.add_argument("-nw", "--num_workers", required=False, type=int, default=8, help="num_workers")
 arg.add_argument("-mn", "--mask_num", required=False, type=int, default=40, help="mask num")
-arg.add_argument("-fn", "--feat_num", required=False, type=int, default=2048, help="feature num")
+arg.add_argument("-fn", "--feat_num", required=False, type=int, default=1024, help="feature num")
 arg.add_argument("-sn", "--use_subnet", required=False, type=str, default="both", help="use subnet:cnn, gcn, both")
+arg.add_argument("-fs", "--feature_scale", required=False, type=int, default=3, help="which layer feature to use")
 
 opt = vars(arg.parse_args())
 
@@ -203,7 +204,8 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=opt["batch_size"], shuffle=True, num_workers=opt["num_workers"])
     val_loader = DataLoader(val_dataset, batch_size=opt["batch_size"], shuffle=False, num_workers=opt["num_workers"])
 
-    model = AAM4(mask_num=opt["mask_num"], feat_num=opt["feat_num"], use_subnet=opt["use_subnet"])
+    model = AAM4(mask_num=opt["mask_num"], feat_num=opt["feat_num"], use_subnet=opt["use_subnet"],
+                 feat_scale=opt["feature_scale"])
     model.to(device)
 
     criterion = EMD_loss()  # it can be replaced by other loss function
