@@ -41,6 +41,7 @@ arg.add_argument("-sn", "--use_subnet", required=False, type=str, default="both"
 arg.add_argument("-fs", "--feature_scale", required=False, type=int, default=3, help="which layer feature to use")
 arg.add_argument("-ff", "--freeze_feat", required=False, type=int, default=1,
                  help="whether detach the gradient from gcn to feature extractor or not")
+arg.add_argument("-gn", "--gcn_num", required=False, type=int, default=2, help="gcn layer num")
 
 opt = vars(arg.parse_args())
 
@@ -209,7 +210,7 @@ def main():
     val_loader = DataLoader(val_dataset, batch_size=opt["batch_size"], shuffle=False, num_workers=opt["num_workers"])
 
     model = AAM4(mask_num=opt["mask_num"], feat_num=opt["feat_num"], use_subnet=opt["use_subnet"],
-                 feat_scale=opt["feature_scale"], freeze_feat=opt['freeze_feat'])
+                 feat_scale=opt["feature_scale"], freeze_feat=opt['freeze_feat'], gcn_layer_num=opt['gcn_num'])
     model.to(device)
 
     criterion = EMD_loss()  # it can be replaced by other loss function
