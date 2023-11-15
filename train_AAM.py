@@ -39,7 +39,7 @@ arg.add_argument("-mn", "--mask_num", required=False, type=int, default=40, help
 arg.add_argument("-fn", "--feat_num", required=False, type=int, default=1024, help="feature num")
 arg.add_argument("-sn", "--use_subnet", required=False, type=str, default="both", help="use subnet:cnn, gcn, both")
 arg.add_argument("-fs", "--feature_scale", required=False, type=int, default=3, help="which layer feature to use")
-arg.add_argument("-ff", "--freeze_feat", required=False, type=bool, default=1,
+arg.add_argument("-ff", "--freeze_feat", required=False, type=int, default=1,
                  help="whether detach the gradient from gcn to feature extractor or not")
 
 opt = vars(arg.parse_args())
