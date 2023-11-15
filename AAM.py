@@ -142,7 +142,7 @@ class UNet(nn.Module):
 
 
 class MyCustomModel(nn.Module):
-    def __init__(self, num_classes=10):
+    def __init__(self, num_classes=10, feat_at=3):
         super(MyCustomModel, self).__init__()
         # 加载预训练的 ResNet50
         self.resnet50 = torchvision.models.resnet50(pretrained=True)
@@ -165,7 +165,7 @@ class MyCustomModel(nn.Module):
 
         x = self.resnet50.layer1(x)
         x = self.resnet50.layer2(x)
-        intermediate_features = self.resnet50.layer3(x) # TODO: change it
+        intermediate_features = self.resnet50.layer3(x)
         x = self.resnet50.layer4(intermediate_features)
 
         # 继续前向传播获取分类结果
@@ -564,7 +564,9 @@ class AAM3(nn.Module):
 
     def forward(self, imgs, masks, mask_loc):
         cnn_pred, feats = self.feature_extractor(imgs)
-        feats = self.conv1x1(feats)
+
+        if feats.shape[1] != self.feat_num:
+            feats = self.conv1x1(feats)
 
         for _ in range(4):
             masks = F.max_pool2d(masks, kernel_size=2, stride=2)
@@ -605,20 +607,13 @@ class AAM3(nn.Module):
 
 
 class AAM4(nn.Module):
-    def __init__(self, mask_num=30, feat_num=64, out_class=10, use_subnet="both"):
+    def __init__(self, mask_num=30, feat_num=64, out_class=10, use_subnet="both", feat_scale=3):
         super(AAM4, self).__init__()
-        # self.feature_extractor = FCN(in_channel=3, out_channel=feat_num)
         self.feat_num = feat_num
         self.mask_num = mask_num
         self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.use_subnet = use_subnet
-        # self.feature_extractor = FCN3(in_channel=3, out_channel=feat_num, bias=True, scale=4)
-        # self.cnn = torchvision.models.resnet50(pretrained=True)
-        # self.cnn.fc = nn.Sequential(
-        #     nn.Dropout(0.75),
-        #     nn.Linear(2048, out_class),
-        #     nn.Sigmoid() if out_class == 1 else nn.Softmax()
-        # )
+        self.feat_scale = feat_scale
 
         self.feature_extractor = torchvision.models.resnet50(pretrained=True)
         self.feature_extractor.fc = nn.Sequential(
@@ -626,9 +621,13 @@ class AAM4(nn.Module):
             nn.Linear(self.feature_extractor.fc.in_features, out_class),
             nn.Softmax(dim=1) if out_class > 1 else nn.Sigmoid()
         )
-        self.hook = self.feature_extractor.layer3.register_forward_hook(self.get_layer3_features)
+        layers = ['layer1', 'layer2', 'layer3', 'layer4']
+        for layer_name in layers:
+            layer = getattr(self.feature_extractor, layer_name)
+            layer.register_forward_hook(self.create_hook(layer_name))
         self.features = {}
-        self.conv1x1 = nn.Conv2d(1024, feat_num, kernel_size=1, stride=1, padding=0)
+        conv11_in_channel = 128*(2**feat_scale)
+        self.conv1x1 = nn.Conv2d(conv11_in_channel, feat_num, kernel_size=1, stride=1, padding=0)
 
         self.GCN_layer1 = GraphConvLayer(dim_feature=feat_num)
         self.GCN_layer2 = GraphConvLayer(dim_feature=feat_num)
@@ -649,50 +648,56 @@ class AAM4(nn.Module):
         #         nn.init.constant_(m.weight, 1)
         #         nn.init.constant_(m.bias, 0)
 
-    def get_layer3_features(self, module, input, output):
-        # 将 layer3 的输出存储到类的特征字典中
-        self.features['layer3'] = output.detach()
+    def create_hook(self, layer_name):
+        def hook(module, input, output):
+            self.features[layer_name] = output
+
+        return hook
 
     def forward(self, imgs, masks, mask_loc):
         cnn_pred = self.feature_extractor(imgs)
 
-        # feats = self.conv1x1(self.features['layer3'])
-        #
-        # for _ in range(4):
-        #     masks = F.max_pool2d(masks, kernel_size=2, stride=2)
-        #
-        # masked_feats = feats.unsqueeze(1) * masks.unsqueeze(2)
-        #
-        # pooled_features = F.adaptive_avg_pool2d(masked_feats, (1, 1)).squeeze(-1).squeeze(-1)
-        # # 将分割为mask_num组
-        #
-        # # ============计算掩码空间关系============
-        #
-        # batch_size, m, _ = mask_loc.size()
-        #
-        # # 计算点之间的欧氏距离
-        # # 首先扩展张量以进行广播计算
-        # expanded_points1 = mask_loc.unsqueeze(2).expand(batch_size, m, m, 2)
-        # expanded_points2 = mask_loc.unsqueeze(1).expand(batch_size, m, m, 2)
-        #
-        # # 计算点之间的欧氏距离
-        # A_spa = torch.norm(expanded_points1 - expanded_points2, dim=3)
-        # A_spa = F.softmax(A_spa, dim=2)
-        # # =====================================
-        # gcn1 = self.GCN_layer1(pooled_features, A_spa)
-        # gcn2 = self.GCN_layer2(gcn1, A_spa)
-        #
-        # gcn_pred = self.gcn_projector(gcn2)
-        #
-        # # print(f"GCN: {gcn_pred[0].detach().cpu().numpy()}, CNN: {cnn_pred[0].detach().cpu().numpy()}")
-        # if self.use_subnet == "gcn":
-        #     pred = gcn_pred
-        # elif self.use_subnet == "cnn":
-        #     pred = cnn_pred
-        # elif self.use_subnet == "both":
-        #     pred = (gcn_pred + cnn_pred) / 2
-        # else:
-        #     raise ValueError("use_subnet should be one of ['gcn', 'cnn', 'both']")
+        feat_layer = "layer" + str(self.feat_scale)
+        feats = self.features[feat_layer].detach()
+
+        if feats.shape[1] != self.feat_num:
+            feats = self.conv1x1(feats)
+
+        for _ in range(self.feat_scale + 1):
+            masks = F.max_pool2d(masks, kernel_size=2, stride=2)
+
+        masked_feats = feats.unsqueeze(1) * masks.unsqueeze(2)
+
+        pooled_features = F.adaptive_avg_pool2d(masked_feats, (1, 1)).squeeze(-1).squeeze(-1)
+        # 将分割为mask_num组
+
+        # ============计算掩码空间关系============
+
+        batch_size, m, _ = mask_loc.size()
+
+        # 计算点之间的欧氏距离
+        # 首先扩展张量以进行广播计算
+        expanded_points1 = mask_loc.unsqueeze(2).expand(batch_size, m, m, 2)
+        expanded_points2 = mask_loc.unsqueeze(1).expand(batch_size, m, m, 2)
+
+        # 计算点之间的欧氏距离
+        A_spa = torch.norm(expanded_points1 - expanded_points2, dim=3)
+        A_spa = F.softmax(A_spa, dim=2)
+        # =====================================
+        gcn1 = self.GCN_layer1(pooled_features, A_spa)
+        gcn2 = self.GCN_layer2(gcn1, A_spa)
+
+        gcn_pred = self.gcn_projector(gcn2)
+
+        # print(f"GCN: {gcn_pred[0].detach().cpu().numpy()}, CNN: {cnn_pred[0].detach().cpu().numpy()}")
+        if self.use_subnet == "gcn":
+            pred = gcn_pred
+        elif self.use_subnet == "cnn":
+            pred = cnn_pred
+        elif self.use_subnet == "both":
+            pred = (gcn_pred + cnn_pred) / 2
+        else:
+            raise ValueError("use_subnet should be one of ['gcn', 'cnn', 'both']")
         pred = cnn_pred
         return pred
 
@@ -912,4 +917,10 @@ if __name__ == "__main__":
     image_dir = "dataset/images"
     train_csv = "dataset/labels/train_labels.csv"
 
-    model = MyCustomModel(num_classes=10)
+    model = AAM4(feat_scale=2)
+
+    img = torch.randn([1, 3, 224, 224])
+    masks = torch.randn([1, 30, 224, 224])
+    mask_loc = torch.randn(1, 30, 2)
+
+    output = model(img, masks, mask_loc)
