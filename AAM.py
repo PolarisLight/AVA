@@ -694,8 +694,7 @@ class AAM4(nn.Module):
         x_gcn = pooled_features
 
         for i in range(len(self.GCN)):
-            x_gcn = self.GCN_layer1(x_gcn, A_spa)
-
+            x_gcn = self.GCN[i](x_gcn, A_spa)
 
         gcn_pred = self.gcn_projector(x_gcn)
 
