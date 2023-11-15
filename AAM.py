@@ -165,7 +165,7 @@ class MyCustomModel(nn.Module):
 
         x = self.resnet50.layer1(x)
         x = self.resnet50.layer2(x)
-        intermediate_features = self.resnet50.layer3(x)
+        intermediate_features = self.resnet50.layer3(x) # TODO: change it
         x = self.resnet50.layer4(intermediate_features)
 
         # 继续前向传播获取分类结果
@@ -173,7 +173,7 @@ class MyCustomModel(nn.Module):
         x = torch.flatten(x, 1)
         final_output = self.resnet50.fc(x)
 
-        return final_output, intermediate_features.detach()
+        return final_output, intermediate_features
 
 
 class FCN(nn.Module):
