@@ -162,6 +162,8 @@ def validate(model, val_loader, criterion):
 
         val_loss = sum(val_loss) / len(val_loss)
 
+        mse_loss = torch.nn.functional.mse_loss(torch.tensor(pred_score_list), torch.tensor(target_score_list)).item()
+
         # 计算皮尔逊相关系数
         pearson = pearsonr(pred_score_list, target_score_list)[0]
         # 计算斯皮尔曼相关系数
@@ -177,9 +179,9 @@ def validate(model, val_loader, criterion):
 
         if opt["use_wandb"]:
             wandb.log({"val_loss": val_loss, "val_pearson": pearson, "val_spearman": spearman,
-                       "val_acc": acc})
+                       "val_acc": acc, "val_mse": mse_loss})
 
-        print(f"val_loss:{val_loss}, val_pearson:{pearson}, val_spearman:{spearman}, val_acc:{acc}")
+        print(f"val_loss:{val_loss}, val_pearson:{pearson}, val_spearman:{spearman}, val_acc:{acc}, val_mse:{mse_loss}")
 
     return val_loss
 
@@ -196,7 +198,7 @@ def main():
     image_dir = opt["image_dir"]
     csv_dir = opt["csv_dir"]
     train_csv = os.path.join(csv_dir, "train_labels.csv")
-    val_csv = os.path.join(csv_dir, "val_labels.csv")
+    val_csv = os.path.join(csv_dir, "test_labels.csv")
 
     train_dataset = AVADatasetSAM(csv_file=train_csv, root_dir=image_dir, mask_num=opt["mask_num"],
                                   imgsz=224, if_test=False, transform=True)

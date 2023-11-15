@@ -532,7 +532,7 @@ class AAM2(nn.Module):
 
 
 class AAM3(nn.Module):
-    def __init__(self, mask_num=30, feat_num=64, out_class=10, use_subnet="both"):
+    def __init__(self, mask_num=30, feat_num=64, out_class=10, use_subnet="both", gcn_layer_num=2):
         super(AAM3, self).__init__()
         # self.feature_extractor = FCN(in_channel=3, out_channel=feat_num)
         self.feat_num = feat_num
@@ -607,7 +607,8 @@ class AAM3(nn.Module):
 
 
 class AAM4(nn.Module):
-    def __init__(self, mask_num=30, feat_num=64, out_class=10, use_subnet="both", feat_scale=3,freeze_feat=True):
+    def __init__(self, mask_num=30, feat_num=64, out_class=10, use_subnet="both", feat_scale=3, freeze_feat=True,
+                 gcn_layer_num=2):
         super(AAM4, self).__init__()
         self.feat_num = feat_num
         self.mask_num = mask_num
@@ -627,11 +628,13 @@ class AAM4(nn.Module):
             layer = getattr(self.feature_extractor, layer_name)
             layer.register_forward_hook(self.create_hook(layer_name))
         self.features = {}
-        conv11_in_channel = 128*(2**feat_scale)
+        conv11_in_channel = 128 * (2 ** feat_scale)
         self.conv1x1 = nn.Conv2d(conv11_in_channel, feat_num, kernel_size=1, stride=1, padding=0)
 
-        self.GCN_layer1 = GraphConvLayer(dim_feature=feat_num)
-        self.GCN_layer2 = GraphConvLayer(dim_feature=feat_num)
+        # changeable GCN layer nums
+        self.GCN = nn.ModuleList()
+        for i in range(gcn_layer_num):
+            self.GCN.append(GraphConvLayer(dim_feature=feat_num))
 
         self.gcn_projector = nn.Sequential(
             nn.Flatten(),
@@ -688,10 +691,13 @@ class AAM4(nn.Module):
         A_spa = torch.norm(expanded_points1 - expanded_points2, dim=3)
         A_spa = F.softmax(A_spa, dim=2)
         # =====================================
-        gcn1 = self.GCN_layer1(pooled_features, A_spa)
-        gcn2 = self.GCN_layer2(gcn1, A_spa)
+        x_gcn = pooled_features
 
-        gcn_pred = self.gcn_projector(gcn2)
+        for i in range(len(self.GCN)):
+            x_gcn = self.GCN_layer1(x_gcn, A_spa)
+
+
+        gcn_pred = self.gcn_projector(x_gcn)
 
         # print(f"GCN: {gcn_pred[0].detach().cpu().numpy()}, CNN: {cnn_pred[0].detach().cpu().numpy()}")
         if self.use_subnet == "gcn":
@@ -702,7 +708,6 @@ class AAM4(nn.Module):
             pred = (gcn_pred + cnn_pred) / 2
         else:
             raise ValueError("use_subnet should be one of ['gcn', 'cnn', 'both']")
-        pred = cnn_pred
         return pred
 
 
