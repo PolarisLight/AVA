@@ -25,7 +25,7 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 arg = argparse.ArgumentParser()
-arg.add_argument("-n", "--task_name", required=False, default="AAM4-CNN-LR3e-6", type=str, help="task name")
+arg.add_argument("-n", "--task_name", required=False, default="AAM3-FM40-F1024-nima_lr", type=str, help="task name")
 arg.add_argument("-b", "--batch_size", required=False, default=64, type=int, help="batch size")
 arg.add_argument("-e", "--epochs", required=False, default=30, help="epochs")
 arg.add_argument("-lr", "--learning_rate", required=False, type=float, default=3e-6, help="learning rate")
@@ -36,8 +36,8 @@ arg.add_argument("-s", "--image_size", required=False, default=(224, 224), help=
 arg.add_argument("-w", "--use_wandb", required=False, type=int, default=1, help="use wandb or not")
 arg.add_argument("-nw", "--num_workers", required=False, type=int, default=8, help="num_workers")
 arg.add_argument("-mn", "--mask_num", required=False, type=int, default=40, help="mask num")
-arg.add_argument("-fn", "--feat_num", required=False, type=int, default=512, help="feature num")
-arg.add_argument("-sn", "--use_subnet", required=False, type=str, default="cnn", help="use subnet:cnn, gcn, both")
+arg.add_argument("-fn", "--feat_num", required=False, type=int, default=1024, help="feature num")
+arg.add_argument("-sn", "--use_subnet", required=False, type=str, default="both", help="use subnet:cnn, gcn, both")
 
 opt = vars(arg.parse_args())
 
@@ -207,7 +207,18 @@ def main():
     model.to(device)
 
     criterion = EMD_loss()  # it can be replaced by other loss function
-    optimizer = optim.Adam(model.parameters(), lr=opt["learning_rate"], betas=(0.9, 0.9))
+    # optimizer = optim.Adam(model.parameters(), lr=opt["learning_rate"], betas=(0.9, 0.9))
+
+    feature_extractor_params = model.feature_extractor.parameters()
+
+    # 获取除feature_extractor外模型的其余部分的参数
+    remaining_params = [param for name, param in model.named_parameters() if "feature_extractor" not in name]
+
+    # 创建优化器，并为不同部分的参数设置不同的学习率
+    optimizer = optim.Adam([
+        {'params': feature_extractor_params, 'lr': 3e-7},  # 对于feature_extractor使用1e-7的学习率
+        {'params': remaining_params, 'lr': 3e-6}  # 对于模型的其余部分使用1e-6的学习率
+    ],betas=(0.9, 0.9))
 
     # you can use wandb to log your training process
     # if not, just set use_wandb to False
