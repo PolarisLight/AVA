@@ -632,11 +632,9 @@ class AAM4(nn.Module):
         self.conv1x1 = nn.Conv2d(conv11_in_channel, feat_num, kernel_size=1, stride=1, padding=0)
 
         # changeable GCN layer nums
-        GCN = []
+        self.GCN = nn.ModuleList()
         for i in range(gcn_layer_num):
-            GCN.append(GraphConvLayer(dim_feature=feat_num))
-
-        self.GCN = nn.Sequential(*GCN)
+            self.GCN.append(GraphConvLayer(dim_feature=feat_num))
 
         self.gcn_projector = nn.Sequential(
             nn.Flatten(),
@@ -694,8 +692,8 @@ class AAM4(nn.Module):
         A_spa = F.softmax(A_spa, dim=2)
         # =====================================
         x_gcn = pooled_features
-
-        x_gcn = self.GCN(x_gcn, A_spa)
+        for i in range(len(self.GCN)):
+            x_gcn = self.GCN[i](x_gcn, A_spa)
 
         gcn_pred = self.gcn_projector(x_gcn)
 
