@@ -292,7 +292,7 @@ class FCN3(nn.Module):
 
 
 class GraphConvLayer(nn.Module):
-    def __init__(self, dim_feature=64, bias=False):
+    def __init__(self, dim_feature=64, bias=False, resnet=False):
         super(GraphConvLayer, self).__init__()
 
         self.mapping1 = nn.Linear(dim_feature, dim_feature, bias=bias)
@@ -302,12 +302,14 @@ class GraphConvLayer(nn.Module):
         # self.GCN_B = nn.Parameter(torch.FloatTensor(dim_feature))
         self.relu = nn.GELU()
         self.initialize()
+        self.resnet = resnet
 
     def initialize(self):
         nn.init.xavier_uniform_(self.GCN_W)
         # nn.init.xavier_uniform_(self.GCN_B)
 
     def forward(self, x, A_spa):
+        x_in = x
         m1 = self.mapping1(x)
         m2 = self.mapping2(x)
 
@@ -320,6 +322,9 @@ class GraphConvLayer(nn.Module):
         x = torch.matmul(x, self.GCN_W)
         # x = x + self.GCN_B
         x = self.relu(x)
+
+        if self.resnet:
+            x = x + x_in
 
         return x
 
