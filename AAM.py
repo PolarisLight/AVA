@@ -613,7 +613,7 @@ class AAM3(nn.Module):
 
 class AAM4(nn.Module):
     def __init__(self, mask_num=30, feat_num=64, out_class=10, use_subnet="both", feat_scale=3, freeze_feat=True,
-                 gcn_layer_num=2):
+                 gcn_layer_num=2,resnet=False):
         super(AAM4, self).__init__()
         self.feat_num = feat_num
         self.mask_num = mask_num
@@ -639,7 +639,7 @@ class AAM4(nn.Module):
         # changeable GCN layer nums
         self.GCN = nn.ModuleList()
         for i in range(gcn_layer_num):
-            self.GCN.append(GraphConvLayer(dim_feature=feat_num))
+            self.GCN.append(GraphConvLayer(dim_feature=feat_num, resnet=resnet))
 
         self.gcn_projector = nn.Sequential(
             nn.Flatten(),
