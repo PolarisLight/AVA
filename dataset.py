@@ -94,7 +94,7 @@ class AVADatasetFastSAM(data.Dataset):
                 masks = sorted_mask[:self.mask_num]
             else:
                 masks[:sorted_mask.shape[0]] = sorted_mask
-        annotations = self.annotations.iloc[idx, 1:].to_numpy()
+        annotations = self.annotations.iloc[idx, 1:11].to_numpy()
         annotations = annotations.astype('float').reshape(-1, )
         sample = {'img_id': img_name, 'image': image, 'annotations': annotations}
         if self.mask:
@@ -118,7 +118,7 @@ class AVADatasetSAM(data.Dataset):
         transform: preprocessing and augmentation of the training images
     """
 
-    def __init__(self, csv_file, root_dir, transform=None, imgsz=512, mask_num=30, mask=True, device='cpu',
+    def __init__(self, csv_file, root_dir, transform=None, imgsz=(512,512), mask_num=30, mask=True, device='cpu',
                  if_test=False):
         super(AVADatasetSAM, self).__init__()
         self.annotations = pd.read_csv(csv_file)
@@ -131,7 +131,7 @@ class AVADatasetSAM(data.Dataset):
         self.if_test = if_test
         self.transform = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Resize((224, 224)),
+            transforms.Resize(imgsz),
             # transforms.RandomCrop(448),
             # transforms.RandomHorizontalFlip(),
 
@@ -169,12 +169,12 @@ class AVADatasetSAM(data.Dataset):
             centroid_x = int(M["m10"] / (M["m00"] + 1e-6))
             centroid_y = int(M["m01"] / (M["m00"] + 1e-6))
             mask_loc[i] = [centroid_x, centroid_y]
-            mask = cv2.resize(mask, (224, 224), interpolation=cv2.INTER_NEAREST)
+            mask = cv2.resize(mask, self.imgsz, interpolation=cv2.INTER_NEAREST)
             mask = np.array(mask, dtype=np.float32)
             resized_masks.append(mask)
 
         if len(resized_masks) < self.mask_num:
-            resized_masks = resized_masks + [np.zeros((224, 224), dtype=np.float32)] * (
+            resized_masks = resized_masks + [np.zeros(self.imgsz, dtype=np.float32)] * (
                     self.mask_num - len(resized_masks))
             mask_loc = np.concatenate((mask_loc, np.zeros((self.mask_num - len(mask_loc), 2))))
         else:
