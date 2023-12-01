@@ -118,7 +118,7 @@ class AVADatasetSAM(data.Dataset):
         transform: preprocessing and augmentation of the training images
     """
 
-    def __init__(self, csv_file, root_dir, transform=None, imgsz=(512,512), mask_num=30, mask=True, device='cpu',
+    def __init__(self, csv_file, root_dir, transform=None, imgsz=(512, 512), mask_num=30, mask=True, device='cpu',
                  if_test=False):
         super(AVADatasetSAM, self).__init__()
         self.annotations = pd.read_csv(csv_file)
@@ -131,7 +131,7 @@ class AVADatasetSAM(data.Dataset):
         self.if_test = if_test
         self.transform = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Resize(imgsz),
+            transforms.Resize(imgsz, antialias=True),
             # transforms.RandomCrop(448),
             # transforms.RandomHorizontalFlip(),
 

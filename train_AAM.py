@@ -1,5 +1,6 @@
 import os
 import argparse
+import random
 
 import numpy as np
 import torch
@@ -16,6 +17,13 @@ import wandb  # wandb is a tool for visualizing the training process, please ref
 from dataset import AVADatasetSAM, train_transform, val_transform
 from utils import EMD_loss, dis_2_score
 from AAM import AAM3, AAM4
+
+seed = 42
+torch.manual_seed(seed)
+np.random.seed(seed)
+random.seed(seed)
+torch.cuda.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)  # 如果使用多个GPU
 
 # this is for solving the problem of "OMP: Error #15: Initializing libiomp5.dylib,
 # but found libiomp5.dylib already initialized."
@@ -34,7 +42,7 @@ arg.add_argument("-d", "--image_dir", required=False, default="D:\\Dataset\\AVA\
 arg.add_argument("-c", "--csv_dir", required=False, default="D:\\Dataset\\AVA\\labels", help="csv dir")
 arg.add_argument("-s", "--image_size", required=False, default=224,type=int, help="image size")
 arg.add_argument("-w", "--use_wandb", required=False, type=int, default=1, help="use wandb or not")
-arg.add_argument("-nw", "--num_workers", required=False, type=int, default=8, help="num_workers")
+arg.add_argument("-nw", "--num_workers", required=False, type=int, default=16, help="num_workers")
 arg.add_argument("-mn", "--mask_num", required=False, type=int, default=40, help="mask num")
 arg.add_argument("-fn", "--feat_num", required=False, type=int, default=1024, help="feature num")
 arg.add_argument("-sn", "--use_subnet", required=False, type=str, default="both", help="use subnet:cnn, gcn, both")
@@ -55,15 +63,12 @@ if not os.path.exists(model_saved_path):
 # CUDA, MPS(Mac) and CPU support
 if torch.cuda.is_available():
     device = torch.device('cuda')
-    print('Using device:cuda')
 elif torch.backends.mps.is_available():
     device = torch.device('mps')
     opt["use_wandb"] = 0
-    print('Using device:mps')
 else:
     device = torch.device('cpu')
     opt["use_wandb"] = 0
-    print('Using device:cpu')
 
 
 def learning_rate_decay(optimizer, epoch, decay_rate=0.1, decay_epoch=5):
@@ -189,6 +194,7 @@ def validate(model, val_loader, criterion):
 
 
 def main():
+    print(f"using device {device}")
     # show options formally
     print("Options:")
     for k, v in opt.items():
