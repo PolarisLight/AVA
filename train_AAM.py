@@ -14,7 +14,7 @@ from sklearn.metrics import accuracy_score
 import tqdm
 import wandb  # wandb is a tool for visualizing the training process, please refer to https://wandb.ai/site
 
-from dataset import AVADatasetSAM, train_transform, val_transform
+from dataset import AVADatasetSAM, train_transform, val_transform,AVADatasetSAM_New
 from utils import EMD_loss, dis_2_score
 from AAM import AAM3, AAM4
 
@@ -42,7 +42,7 @@ arg.add_argument("-d", "--image_dir", required=False, default="D:\\Dataset\\AVA\
 arg.add_argument("-c", "--csv_dir", required=False, default="D:\\Dataset\\AVA\\labels", help="csv dir")
 arg.add_argument("-s", "--image_size", required=False, default=224,type=int, help="image size")
 arg.add_argument("-w", "--use_wandb", required=False, type=int, default=1, help="use wandb or not")
-arg.add_argument("-nw", "--num_workers", required=False, type=int, default=16, help="num_workers")
+arg.add_argument("-nw", "--num_workers", required=False, type=int, default=8, help="num_workers")
 arg.add_argument("-mn", "--mask_num", required=False, type=int, default=40, help="mask num")
 arg.add_argument("-fn", "--feat_num", required=False, type=int, default=1024, help="feature num")
 arg.add_argument("-sn", "--use_subnet", required=False, type=str, default="both", help="use subnet:cnn, gcn, both")
@@ -208,9 +208,9 @@ def main():
     train_csv = os.path.join(csv_dir, "train_labels.csv")
     val_csv = os.path.join(csv_dir, "test_labels.csv")
 
-    train_dataset = AVADatasetSAM(csv_file=train_csv, root_dir=image_dir, mask_num=opt["mask_num"],
+    train_dataset = AVADatasetSAM_New(csv_file=train_csv, root_dir=image_dir, mask_num=opt["mask_num"],
                                   imgsz=(opt['image_size'],opt['image_size']), if_test=False, transform=True)
-    val_dataset = AVADatasetSAM(csv_file=val_csv, root_dir=image_dir, mask_num=opt["mask_num"],
+    val_dataset = AVADatasetSAM_New(csv_file=val_csv, root_dir=image_dir, mask_num=opt["mask_num"],
                                 imgsz=(opt['image_size'],opt['image_size']), if_test=True, transform=True)
 
     train_loader = DataLoader(train_dataset, batch_size=opt["batch_size"], shuffle=True, num_workers=opt["num_workers"])
