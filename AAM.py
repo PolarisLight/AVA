@@ -613,7 +613,7 @@ class AAM3(nn.Module):
 
 class AAM4(nn.Module):
     def __init__(self, mask_num=30, feat_num=64, out_class=10, use_subnet="both", feat_scale=3, freeze_feat=True,
-                 gcn_layer_num=2,resnet=False):
+                 gcn_layer_num=2, resnet=False, dropout=0.75):
         super(AAM4, self).__init__()
         self.feat_num = feat_num
         self.mask_num = mask_num
@@ -624,7 +624,7 @@ class AAM4(nn.Module):
 
         self.feature_extractor = torchvision.models.resnet50(pretrained=True)
         self.feature_extractor.fc = nn.Sequential(
-            nn.Dropout(0.75),
+            nn.Dropout(dropout),
             nn.Linear(self.feature_extractor.fc.in_features, out_class),
             nn.Softmax(dim=1) if out_class > 1 else nn.Sigmoid()
         )
@@ -643,7 +643,7 @@ class AAM4(nn.Module):
 
         self.gcn_projector = nn.Sequential(
             nn.Flatten(),
-            nn.Dropout(0.75),
+            nn.Dropout(dropout),
             nn.Linear(feat_num * mask_num, out_class),
             nn.Sigmoid() if out_class == 1 else nn.Softmax(dim=1)
         )
