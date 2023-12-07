@@ -84,18 +84,18 @@ sweep_config['parameters'].update({
 
     'lr': {
         'distribution': 'log_uniform_values',
-        'min': 1e-8,
-        'max': 1e-2,
+        'min': 1e-7,
+        'max': 1e-3,
     },
     'batch_size': {
         'distribution': 'q_uniform',
         'q': 8,
-        'min': 16,
+        'min': 32,
         'max': 64,
     },
     'dropout_p': {
         'distribution': 'uniform',
-        'min': 0,
+        'min': 0.25,
         'max': 0.75,
     },
     'mask_num': {
@@ -107,14 +107,14 @@ sweep_config['parameters'].update({
     'image_size': {
         'distribution': 'q_uniform',
         'q': 16,
-        'min': 224,
+        'min': 320,
         'max': 400,
     },
-    'gcn_layer': {
+    'gcn_num': {
         'distribution': 'q_uniform',
-        'q': 1,
-        'min': 1,
-        'max': 10,
+        'q': 2,
+        'min': 5,
+        'max': 15,
     },
 })
 
@@ -126,10 +126,10 @@ sweep_config['early_terminate'] = {
 }
 
 from pprint import pprint
+
 pprint(sweep_config)
 
-sweed_id = wandb.sweep(sweep_config, project='AAM-sweep')
-
+sweep_id = wandb.sweep(sweep_config, project='AAM-sweep')
 
 
 def learning_rate_decay(optimizer, epoch, decay_rate=0.1, decay_epoch=5):
@@ -163,7 +163,7 @@ def train(model, train_loader, val_loader, criterion, optimizer,
     :return:
     """
     model.best_acc = -1.0
-    for epoch in range(config.epoches):
+    for epoch in range(config.epochs):
         learning_rate_decay(optimizer, epoch)
         print(f"learning rate:{optimizer.param_groups[0]['lr']}")
         model.train()
@@ -246,32 +246,38 @@ def validate(model, val_loader, criterion):
     return acc
 
 
-def main(config=None):
+def main():
     print(f"using device {device}")
     """
     main function
     :return:
     """
-    image_dir = config.image_dir
-    csv_dir = config.csv_dir
+    nowtime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    wandb.init(project='AAM-sweep', config=wandb.config.__dict__, name=nowtime, save_code=True)
+    image_dir = wandb.config.image_dir
+    csv_dir = wandb.config.csv_dir
     train_csv = os.path.join(csv_dir, "train_labels.csv")
     val_csv = os.path.join(csv_dir, "test_labels.csv")
 
-    train_dataset = AVADatasetSAM_New(csv_file=train_csv, root_dir=image_dir, mask_num=config.mask_num,
-                                      imgsz=(config.image_size, config.image_size), if_test=False, transform=True)
-    val_dataset = AVADatasetSAM_New(csv_file=val_csv, root_dir=image_dir, mask_num=config.mask_num,
-                                    imgsz=(config.image_size, config.image_size), if_test=True, transform=True)
+    train_dataset = AVADatasetSAM_New(csv_file=train_csv, root_dir=image_dir, mask_num=wandb.config.mask_num,
+                                      imgsz=(wandb.config.image_size, wandb.config.image_size), if_test=False,
+                                      transform=True)
+    val_dataset = AVADatasetSAM_New(csv_file=val_csv, root_dir=image_dir, mask_num=wandb.config.mask_num,
+                                    imgsz=(wandb.config.image_size, wandb.config.image_size), if_test=True,
+                                    transform=True)
 
-    train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True, num_workers=config.num_workers)
-    val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False, num_workers=config.num_workers)
+    train_loader = DataLoader(train_dataset, batch_size=wandb.config.batch_size, shuffle=True,
+                              num_workers=wandb.config.num_workers)
+    val_loader = DataLoader(val_dataset, batch_size=wandb.config.batch_size, shuffle=False,
+                            num_workers=wandb.config.num_workers)
 
-    model = AAM4(mask_num=config.mask_num, feat_num=config.feat_num, use_subnet=config.use_subnet,
-                 feat_scale=3, freeze_feat=0, gcn_layer_num=config.gcn_num,dropout=config.dropout_p,
+    model = AAM4(mask_num=wandb.config.mask_num, feat_num=1024, use_subnet=wandb.config.use_subnet,
+                 feat_scale=3, freeze_feat=0, gcn_layer_num=wandb.config.gcn_num, dropout=wandb.config.dropout_p,
                  resnet=1)
     model.to(device)
 
     criterion = EMD_loss()  # it can be replaced by other loss function
-    optimizer = torch.optim.__dict__[config.optim_type](model.parameters(), lr=config.lr)
+    optimizer = torch.optim.__dict__[wandb.config.optim_type](model.parameters(), lr=wandb.config.lr)
 
     # feature_extractor_params = model.feature_extractor.parameters()
     #
@@ -286,16 +292,15 @@ def main(config=None):
 
     # you can use wandb to log your training process
     # if not, just set use_wandb to False
-    nowtime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    wandb.init(project=config.project_name, config=config.__dict__, name=nowtime, save_code=True)
 
-    train(model, train_loader, val_loader, criterion, optimizer, config=config)
+    train(model, train_loader, val_loader, criterion, optimizer, config=wandb.config)
     model.run_id = wandb.run.id
 
     wandb.finish()
 
     return model
 
+
 if __name__ == '__main__':
-    wandb.agent(sweep_config, function=main, count=100)
+    wandb.agent(sweep_id=sweep_id, function=main)
     # main(config=opt)
