@@ -130,6 +130,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
                 if opt["use_wandb"]:
                     wandb.log({"loss": loss, "epoch": epoch})
 
+
         val_loss = validate(model, val_loader, criterion)
 
         if model_saved_path is not None:

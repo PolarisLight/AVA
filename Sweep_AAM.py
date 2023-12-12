@@ -68,6 +68,9 @@ sweep_config['parameters'].update({
     'image_dir': {'value': opt['image_dir']},
     'csv_dir': {'value': opt['csv_dir']},
     'num_workers': {'value': opt['num_workers']},
+    'image_size': {'value': 224},
+    'batch_size': {'value': 32},
+    'use_subnet': {'value': 'both'},
 })
 
 # 离散型分布超参
@@ -75,9 +78,6 @@ sweep_config['parameters'].update({
     'optim_type': {
         'values': ['Adam', 'SGD', 'RMSprop']
     },
-    'use_subnet': {
-        'values': ['cnn', 'gcn', 'both']
-    }
 })
 # 连续型分布超参
 sweep_config['parameters'].update({
@@ -87,14 +87,9 @@ sweep_config['parameters'].update({
         'min': 1e-7,
         'max': 1e-3,
     },
-    'batch_size': {
-        'distribution': 'q_uniform',
-        'q': 8,
-        'min': 32,
-        'max': 64,
-    },
     'dropout_p': {
-        'distribution': 'uniform',
+        'distribution': 'q_uniform',
+        'q':0.05,
         'min': 0.25,
         'max': 0.75,
     },
@@ -103,12 +98,6 @@ sweep_config['parameters'].update({
         'q': 5,
         'min': 10,
         'max': 80,
-    },
-    'image_size': {
-        'distribution': 'q_uniform',
-        'q': 16,
-        'min': 320,
-        'max': 400,
     },
     'gcn_num': {
         'distribution': 'q_uniform',
@@ -125,11 +114,7 @@ sweep_config['early_terminate'] = {
     's': 4
 }
 
-from pprint import pprint
 
-pprint(sweep_config)
-
-sweep_id = wandb.sweep(sweep_config, project='AAM-sweep')
 
 
 def learning_rate_decay(optimizer, epoch, decay_rate=0.1, decay_epoch=5):
@@ -188,11 +173,14 @@ def train(model, train_loader, val_loader, criterion, optimizer,
 
         if config.ckpt_path is not None:
             if val_acc > model.best_acc:
-                torch.save(model.state_dict(), os.path.join(config.ckpt_path, config.ckpt_path))
+                torch.save(model.state_dict(), config.ckpt_path)
                 model.best_acc = val_acc
                 print(f"Model saved at {config.ckpt_path}")
             else:
                 print("Model not saved")
+    # 在程序结束后，清空RAM和GPU缓存
+    torch.cuda.empty_cache()
+
 
 
 def validate(model, val_loader, criterion):
@@ -286,13 +274,12 @@ def main():
     #
     # # 创建优化器，并为不同部分的参数设置不同的学习率
     # optimizer = optim.Adam([
-    #     {'params': feature_extractor_params, 'lr': 3e-7},  # 对于feature_extractor使用1e-7的学习率
+    #     {'params': feature_extractor_params, 'lr': 3e-7},  # 对于feature_extractor使用1e-7的学习率+
     #     {'params': remaining_params, 'lr': 3e-6}  # 对于模型的其余部分使用1e-6的学习率
     # ],betas=(0.9, 0.9))
 
     # you can use wandb to log your training process
     # if not, just set use_wandb to False
-
     train(model, train_loader, val_loader, criterion, optimizer, config=wandb.config)
     model.run_id = wandb.run.id
 
@@ -302,5 +289,10 @@ def main():
 
 
 if __name__ == '__main__':
-    wandb.agent(sweep_id=sweep_id, function=main)
+    from pprint import pprint
+
+    pprint(sweep_config)
+
+    sweep_id = wandb.sweep(sweep_config, project='AAM-sweep')
+    wandb.agent(sweep_id=sweep_id, function=main, count=100)
     # main(config=opt)

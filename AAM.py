@@ -628,10 +628,18 @@ class AAM4(nn.Module):
             nn.Linear(self.feature_extractor.fc.in_features, out_class),
             nn.Softmax(dim=1) if out_class > 1 else nn.Sigmoid()
         )
-        layers = ['layer1', 'layer2', 'layer3', 'layer4']
-        for layer_name in layers:
-            layer = getattr(self.feature_extractor, layer_name)
-            layer.register_forward_hook(self.create_hook(layer_name))
+        # ======================= 1 ==========================
+        # self.layer_name = "layer" + str(feat_scale)
+        # layers = ['layer1', 'layer2', 'layer3', 'layer4']
+        # for layer_name in layers:
+        #     layer = getattr(self.feature_extractor, layer_name)
+        #     layer.register_forward_hook(self.create_hook(layer_name))
+
+        # ======================= 2 =============================
+        self.layer_name = "layer" + str(feat_scale)
+        layer = getattr(self.feature_extractor, self.layer_name)
+        layer.register_forward_hook(self.create_hook(self.layer_name))
+        # =======================================================
         self.features = {}
         conv11_in_channel = 128 * (2 ** feat_scale)
         self.conv1x1 = nn.Conv2d(conv11_in_channel, feat_num, kernel_size=1, stride=1, padding=0)
@@ -665,12 +673,10 @@ class AAM4(nn.Module):
 
     def forward(self, imgs, masks, mask_loc):
         cnn_pred = self.feature_extractor(imgs)
-
-        feat_layer = "layer" + str(self.feat_scale)
         if self.freeze_feat:
-            feats = self.features[feat_layer].detach()
+            feats = self.features[self.layer_name].detach()
         else:
-            feats = self.features[feat_layer]
+            feats = self.features[self.layer_name]
 
         if feats.shape[1] != self.feat_num:
             feats = self.conv1x1(feats)
