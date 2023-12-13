@@ -673,6 +673,10 @@ class AAM4(nn.Module):
 
     def forward(self, imgs, masks, mask_loc):
         cnn_pred = self.feature_extractor(imgs)
+
+        if self.use_subnet == "cnn":
+            return cnn_pred
+
         if self.freeze_feat:
             feats = self.features[self.layer_name].detach()
         else:
