@@ -206,7 +206,7 @@ class AVADatasetSAM_New(data.Dataset):
     """
 
     def __init__(self, csv_file, root_dir, transform=None, imgsz=(512, 512), mask_num=30, mask=True, device='cpu',
-                 if_test=False):
+                 if_test=False, shuffle=False):
         super(AVADatasetSAM_New, self).__init__()
         self.annotations = pd.read_csv(csv_file)
         self.root_dir = root_dir
@@ -216,6 +216,7 @@ class AVADatasetSAM_New(data.Dataset):
         self.imgsz = imgsz
         self.mask_num = mask_num
         self.if_test = if_test
+        self.shuffle = shuffle
         self.transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Resize(imgsz, antialias=True),
@@ -248,6 +249,10 @@ class AVADatasetSAM_New(data.Dataset):
                 mask_loc[:, 0] = masks.shape[2] - mask_loc[:, 0]
 
         resized_masks = F.interpolate(masks.unsqueeze(1).type(torch.float), size=self.imgsz, mode='nearest').squeeze(1)
+
+        if self.shuffle:
+            pass
+
 
         if len(resized_masks) < self.mask_num:
             padding_size = [self.mask_num - len(resized_masks), *self.imgsz]

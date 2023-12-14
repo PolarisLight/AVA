@@ -14,7 +14,7 @@ from sklearn.metrics import accuracy_score
 import tqdm
 import wandb  # wandb is a tool for visualizing the training process, please refer to https://wandb.ai/site
 
-from dataset import AVADatasetSAM, train_transform, val_transform,AVADatasetSAM_New
+from dataset import AVADatasetSAM, train_transform, val_transform, AVADatasetSAM_New
 from utils import EMD_loss, dis_2_score
 from AAM import AAM3, AAM4
 
@@ -40,7 +40,7 @@ arg.add_argument("-lr", "--learning_rate", required=False, type=float, default=3
 arg.add_argument("-m", "--model_saved_path", required=False, default="saved_models", help="model saved path")
 arg.add_argument("-d", "--image_dir", required=False, default="D:\\Dataset\\AVA\\images", help="image dir")
 arg.add_argument("-c", "--csv_dir", required=False, default="D:\\Dataset\\AVA\\labels", help="csv dir")
-arg.add_argument("-s", "--image_size", required=False, default=224,type=int, help="image size")
+arg.add_argument("-s", "--image_size", required=False, default=224, type=int, help="image size")
 arg.add_argument("-w", "--use_wandb", required=False, type=int, default=1, help="use wandb or not")
 arg.add_argument("-nw", "--num_workers", required=False, type=int, default=8, help="num_workers")
 arg.add_argument("-mn", "--mask_num", required=False, type=int, default=40, help="mask num")
@@ -128,8 +128,10 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
                            100. * batch_idx / len(train_loader), loss.item()
                 ))
                 if opt["use_wandb"]:
-                    wandb.log({"loss": loss, "epoch": epoch})
-
+                    wandb.log({"loss": loss,
+                               "epoch": epoch})
+                    wandb.log({"gcn grad": torch.mean(model.gcn_projector[2].weight.grad),
+                               "cnn grad": torch.mean(model.feature_extractor.fc[1].weight.grad)})
 
         val_loss = validate(model, val_loader, criterion)
 
@@ -212,7 +214,7 @@ def main():
     train_dataset = AVADatasetSAM_New(csv_file=train_csv, root_dir=image_dir, mask_num=opt["mask_num"],
                                   imgsz=(opt['image_size'],opt['image_size']), if_test=False, transform=True)
     val_dataset = AVADatasetSAM_New(csv_file=val_csv, root_dir=image_dir, mask_num=opt["mask_num"],
-                                imgsz=(opt['image_size'],opt['image_size']), if_test=True, transform=True)
+                                    imgsz=(opt['image_size'], opt['image_size']), if_test=True, transform=True)
 
     train_loader = DataLoader(train_dataset, batch_size=opt["batch_size"], shuffle=True, num_workers=opt["num_workers"])
     val_loader = DataLoader(val_dataset, batch_size=opt["batch_size"], shuffle=False, num_workers=opt["num_workers"])
