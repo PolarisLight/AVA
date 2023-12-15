@@ -6,3 +6,4 @@ tqdm
 numpy
 pandas
 matplotlib
+protobuf==3.20

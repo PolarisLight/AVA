@@ -52,7 +52,7 @@ arg.add_argument("-ff", "--freeze_feat", required=False, type=int, default=0,
 arg.add_argument("-gn", "--gcn_num", required=False, type=int, default=2, help="gcn layer num")
 arg.add_argument("-r", "--resnet", required=False, type=int, default=0, help="use resnet gcn or not")
 arg.add_argument("-sf", "--shuffle", required=False, type=int, default=0, help="shuffle mask channel or not")
-arg.add_argument("-l2", "--use_L2", required=False, type=int, default=0, help="use mask center space distance or not")
+arg.add_argument("-l2", "--use_L2", required=False, type=int, default=1, help="use mask center space distance or not")
 
 opt = vars(arg.parse_args())
 
