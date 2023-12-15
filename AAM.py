@@ -617,7 +617,7 @@ class AAM3(nn.Module):
 
 class AAM4(nn.Module):
     def __init__(self, mask_num=30, feat_num=64, out_class=10, use_subnet="both", feat_scale=3, freeze_feat=True,
-                 gcn_layer_num=2, resnet=False, dropout=0.75,use_L2=True):
+                 gcn_layer_num=2, resnet=False, dropout=0.75, use_L2=True):
         super(AAM4, self).__init__()
         self.feat_num = feat_num
         self.mask_num = mask_num
@@ -707,8 +707,8 @@ class AAM4(nn.Module):
         expanded_points2 = mask_loc.unsqueeze(1).expand(batch_size, m, m, 2)
 
         # 计算点之间的欧氏距离
-        A_spa = torch.norm(expanded_points1 - expanded_points2, dim=3)
-        A_spa = F.softmax(A_spa, dim=2)
+        A_spa = torch.norm(expanded_points1 - expanded_points2, dim=3) / imgs.shape[2]
+        A_spa = F.softmax(-A_spa, dim=2)
         # =====================================
         x_gcn = pooled_features
         for i in range(len(self.GCN)):
