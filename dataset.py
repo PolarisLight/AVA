@@ -8,6 +8,7 @@ NIMA is released under the MIT license. See LICENSE for the fill license text.
 
 import os
 import time
+import random
 
 import pandas as pd
 from PIL import Image
@@ -250,8 +251,6 @@ class AVADatasetSAM_New(data.Dataset):
 
         resized_masks = F.interpolate(masks.unsqueeze(1).type(torch.float), size=self.imgsz, mode='nearest').squeeze(1)
 
-        if self.shuffle:
-            pass
 
 
         if len(resized_masks) < self.mask_num:
@@ -265,6 +264,12 @@ class AVADatasetSAM_New(data.Dataset):
         else:
             resized_masks = resized_masks[:self.mask_num]
             mask_loc = mask_loc[:self.mask_num]
+
+        if self.shuffle:
+            channel_indices = torch.randperm(resized_masks.shape[0])
+            resized_masks = resized_masks[channel_indices]
+            mask_loc = mask_loc[channel_indices]
+
 
         mask_loc = mask_loc.type(torch.float32)
 
@@ -379,7 +384,7 @@ if __name__ == '__main__':
     #     break
     test_dataset = AVADatasetSAM_New(csv_file="D:\\Dataset\\AVA\\labels\\test_labels.csv",
                                      root_dir="D:\\Dataset\\AVA\\images",
-                                     mask_num=30, imgsz=(224, 224), if_test=0)
+                                     mask_num=30, imgsz=(224, 224), if_test=0,shuffle=1)
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=8, shuffle=False, num_workers=0)
     for i, data in enumerate(test_loader):
         imgs, labels, masks, loc = data

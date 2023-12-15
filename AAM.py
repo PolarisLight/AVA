@@ -292,7 +292,7 @@ class FCN3(nn.Module):
 
 
 class GraphConvLayer(nn.Module):
-    def __init__(self, dim_feature=64, bias=False, resnet=False):
+    def __init__(self, dim_feature=64, bias=False, resnet=False, use_L2=True):
         super(GraphConvLayer, self).__init__()
 
         self.mapping1 = nn.Linear(dim_feature, dim_feature, bias=bias)
@@ -303,6 +303,7 @@ class GraphConvLayer(nn.Module):
         self.relu = nn.GELU()
         self.initialize()
         self.resnet = resnet
+        self.use_L2 = use_L2
 
     def initialize(self):
         nn.init.xavier_uniform_(self.GCN_W)
@@ -316,7 +317,10 @@ class GraphConvLayer(nn.Module):
         similarity = torch.matmul(m1, m2.transpose(1, 2))
         A_sim = F.softmax(similarity, dim=2)
 
-        A = A_sim + A_spa
+        if self.use_L2:
+            A = A_sim + A_spa
+        else:
+            A = A_sim
 
         x = torch.matmul(A, x)
         x = torch.matmul(x, self.GCN_W)
@@ -613,7 +617,7 @@ class AAM3(nn.Module):
 
 class AAM4(nn.Module):
     def __init__(self, mask_num=30, feat_num=64, out_class=10, use_subnet="both", feat_scale=3, freeze_feat=True,
-                 gcn_layer_num=2, resnet=False, dropout=0.75):
+                 gcn_layer_num=2, resnet=False, dropout=0.75,use_L2=True):
         super(AAM4, self).__init__()
         self.feat_num = feat_num
         self.mask_num = mask_num
@@ -647,7 +651,7 @@ class AAM4(nn.Module):
         # changeable GCN layer nums
         self.GCN = nn.ModuleList()
         for i in range(gcn_layer_num):
-            self.GCN.append(GraphConvLayer(dim_feature=feat_num, resnet=resnet))
+            self.GCN.append(GraphConvLayer(dim_feature=feat_num, resnet=resnet, use_L2=use_L2))
 
         self.gcn_projector = nn.Sequential(
             nn.Flatten(),

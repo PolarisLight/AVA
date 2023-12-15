@@ -51,6 +51,8 @@ arg.add_argument("-ff", "--freeze_feat", required=False, type=int, default=0,
                  help="whether detach the gradient from gcn to feature extractor or not")
 arg.add_argument("-gn", "--gcn_num", required=False, type=int, default=2, help="gcn layer num")
 arg.add_argument("-r", "--resnet", required=False, type=int, default=0, help="use resnet gcn or not")
+arg.add_argument("-sf", "--shuffle", required=False, type=int, default=0, help="shuffle mask channel or not")
+arg.add_argument("-l2", "--use_L2", required=False, type=int, default=0, help="use mask center space distance or not")
 
 opt = vars(arg.parse_args())
 
@@ -212,16 +214,18 @@ def main():
     val_csv = os.path.join(csv_dir, "test_labels.csv")
 
     train_dataset = AVADatasetSAM_New(csv_file=train_csv, root_dir=image_dir, mask_num=opt["mask_num"],
-                                  imgsz=(opt['image_size'],opt['image_size']), if_test=False, transform=True)
+                                      imgsz=(opt['image_size'], opt['image_size']), if_test=False, transform=True,
+                                      shuffle=opt["shuffle"])
     val_dataset = AVADatasetSAM_New(csv_file=val_csv, root_dir=image_dir, mask_num=opt["mask_num"],
-                                    imgsz=(opt['image_size'], opt['image_size']), if_test=True, transform=True)
+                                    imgsz=(opt['image_size'], opt['image_size']), if_test=True, transform=True,
+                                    shuffle=opt["shuffle"])
 
     train_loader = DataLoader(train_dataset, batch_size=opt["batch_size"], shuffle=True, num_workers=opt["num_workers"])
     val_loader = DataLoader(val_dataset, batch_size=opt["batch_size"], shuffle=False, num_workers=opt["num_workers"])
 
     model = AAM4(mask_num=opt["mask_num"], feat_num=opt["feat_num"], use_subnet=opt["use_subnet"],
                  feat_scale=opt["feature_scale"], freeze_feat=opt['freeze_feat'], gcn_layer_num=opt['gcn_num'],
-                 resnet=opt['resnet'])
+                 resnet=opt['resnet'],use_L2=opt['use_L2'])
     model.to(device)
 
     criterion = EMD_loss()  # it can be replaced by other loss function
