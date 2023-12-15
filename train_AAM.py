@@ -35,7 +35,7 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 arg = argparse.ArgumentParser()
 arg.add_argument("-n", "--task_name", required=False, default="AAM4-FM40-F2048-", type=str, help="task name")
 arg.add_argument("-b", "--batch_size", required=False, default=64, type=int, help="batch size")
-arg.add_argument("-e", "--epochs", required=False, default=30, help="epochs")
+arg.add_argument("-e", "--epochs", required=False, default=10, help="epochs")
 arg.add_argument("-lr", "--learning_rate", required=False, type=float, default=3e-6, help="learning rate")
 arg.add_argument("-m", "--model_saved_path", required=False, default="saved_models", help="model saved path")
 arg.add_argument("-d", "--image_dir", required=False, default="D:\\Dataset\\AVA\\images", help="image dir")
