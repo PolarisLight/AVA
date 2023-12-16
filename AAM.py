@@ -727,6 +727,25 @@ class AAM4(nn.Module):
             raise ValueError("use_subnet should be one of ['gcn', 'cnn', 'both']")
         return pred
 
+
+class MyFc(nn.Module):
+    def __init__(self, dropout=0.75, out_class=10, in_features=2048):
+        super(MyFc, self).__init__()
+        self.pooling = nn.AdaptiveAvgPool2d((1, 1))
+        self.flatten = nn.Flatten()
+        self.dropout = nn.Dropout(dropout)
+        self.fc = nn.Linear(in_features, out_class)
+        self.activate = nn.Sigmoid() if out_class == 1 else nn.Softmax(dim=1)
+
+    def forward(self, x):
+        x = self.pooling(x)
+        x = self.flatten(x)
+        x = self.dropout(x)
+        x = self.fc(x)
+        x = self.activate(x)
+        return x
+
+
 class AAM5(nn.Module):
     def __init__(self, mask_num=30, feat_num=64, out_class=10, use_subnet="both", feat_scale=3, freeze_feat=True,
                  gcn_layer_num=2, resnet=False, dropout=0.75, use_L2=True):
@@ -743,12 +762,7 @@ class AAM5(nn.Module):
 
         self.feature_extractor = torch.nn.Sequential(*list(resnet.children())[:-2])
 
-        self.cnn_projector = nn.Sequential(
-            nn.Flatten(),
-            nn.Dropout(dropout),
-            nn.Linear(in_features, out_class),
-            nn.Sigmoid() if out_class == 1 else nn.Softmax(dim=1)
-        )
+        self.cnn_projector = MyFc(dropout=dropout, out_class=out_class, in_features=in_features)
         conv11_in_channel = 128 * (2 ** feat_scale)
         self.conv1x1 = nn.Conv2d(conv11_in_channel, feat_num, kernel_size=1, stride=1, padding=0)
 
@@ -758,6 +772,7 @@ class AAM5(nn.Module):
             self.GCN.append(GraphConvLayer(dim_feature=feat_num, resnet=resnet, use_L2=use_L2))
 
         self.gcn_projector = nn.Sequential(
+            nn.AdaptiveAvgPool2d((1, 1)),  # 全局平均池化层，输出大小为1x1
             nn.Flatten(),
             nn.Dropout(dropout),
             nn.Linear(feat_num * mask_num, out_class),
