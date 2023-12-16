@@ -42,7 +42,7 @@ arg.add_argument("-d", "--image_dir", required=False, default="D:\\Dataset\\AVA\
 arg.add_argument("-c", "--csv_dir", required=False, default="D:\\Dataset\\AVA\\labels", help="csv dir")
 arg.add_argument("-s", "--image_size", required=False, default=224, type=int, help="image size")
 arg.add_argument("-w", "--use_wandb", required=False, type=int, default=1, help="use wandb or not")
-arg.add_argument("-nw", "--num_workers", required=False, type=int, default=16, help="num_workers")
+arg.add_argument("-nw", "--num_workers", required=False, type=int, default=8, help="num_workers")
 arg.add_argument("-mn", "--mask_num", required=False, type=int, default=40, help="mask num")
 arg.add_argument("-fn", "--feat_num", required=False, type=int, default=1024, help="feature num")
 arg.add_argument("-sn", "--use_subnet", required=False, type=str, default="both", help="use subnet:cnn, gcn, both")
@@ -137,7 +137,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
                     wandb.log({"loss": loss,
                                "epoch": epoch})
                     wandb.log({"gcn grad": torch.mean(model.gcn_projector[2].weight.grad),
-                               "cnn grad": torch.mean(model.feature_extractor.fc[1].weight.grad)})
+                               "cnn grad": torch.mean(model.cnn_projector[3].weight.grad)})
 
         val_loss = validate(model, val_loader, criterion)
 
