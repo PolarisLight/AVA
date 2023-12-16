@@ -16,7 +16,7 @@ import wandb  # wandb is a tool for visualizing the training process, please ref
 
 from dataset import AVADatasetSAM, train_transform, val_transform, AVADatasetSAM_New
 from utils import EMD_loss, dis_2_score
-from AAM import AAM3, AAM4
+from AAM import AAM3, AAM4, AAM5
 
 seed = 42
 torch.manual_seed(seed)
@@ -227,9 +227,9 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=opt["batch_size"], shuffle=True, num_workers=opt["num_workers"])
     val_loader = DataLoader(val_dataset, batch_size=opt["batch_size"], shuffle=False, num_workers=opt["num_workers"])
 
-    model = AAM4(mask_num=opt["mask_num"], feat_num=opt["feat_num"], use_subnet=opt["use_subnet"],
+    model = AAM5(mask_num=opt["mask_num"], feat_num=opt["feat_num"], use_subnet=opt["use_subnet"],
                  feat_scale=opt["feature_scale"], freeze_feat=opt['freeze_feat'], gcn_layer_num=opt['gcn_num'],
-                 resnet=opt['resnet'],use_L2=opt['use_L2'])
+                 resnet=opt['resnet'], use_L2=opt['use_L2'])
     model.to(device)
 
     criterion = EMD_loss()  # it can be replaced by other loss function
