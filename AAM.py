@@ -727,6 +727,102 @@ class AAM4(nn.Module):
             raise ValueError("use_subnet should be one of ['gcn', 'cnn', 'both']")
         return pred
 
+class AAM5(nn.Module):
+    def __init__(self, mask_num=30, feat_num=64, out_class=10, use_subnet="both", feat_scale=3, freeze_feat=True,
+                 gcn_layer_num=2, resnet=False, dropout=0.75, use_L2=True):
+        super(AAM5, self).__init__()
+        self.feat_num = feat_num
+        self.mask_num = mask_num
+        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.use_subnet = use_subnet
+        self.feat_scale = feat_scale
+        self.freeze_feat = freeze_feat
+
+        resnet = torchvision.models.resnet50(pretrained=True)
+        in_features = resnet.fc.in_features
+
+        self.feature_extractor = torch.nn.Sequential(*list(resnet.children())[:-2])
+
+        self.cnn_projector = nn.Sequential(
+            nn.Flatten(),
+            nn.Dropout(dropout),
+            nn.Linear(in_features, out_class),
+            nn.Sigmoid() if out_class == 1 else nn.Softmax(dim=1)
+        )
+        conv11_in_channel = 128 * (2 ** feat_scale)
+        self.conv1x1 = nn.Conv2d(conv11_in_channel, feat_num, kernel_size=1, stride=1, padding=0)
+
+        # changeable GCN layer nums
+        self.GCN = nn.ModuleList()
+        for i in range(gcn_layer_num):
+            self.GCN.append(GraphConvLayer(dim_feature=feat_num, resnet=resnet, use_L2=use_L2))
+
+        self.gcn_projector = nn.Sequential(
+            nn.Flatten(),
+            nn.Dropout(dropout),
+            nn.Linear(feat_num * mask_num, out_class),
+            nn.Sigmoid() if out_class == 1 else nn.Softmax(dim=1)
+        )
+        # initial feature extractor
+        # for m in self.modules():
+        #     if isinstance(m, nn.Conv2d):
+        #         nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity="relu")
+        #         if m.bias is not None:
+        #             nn.init.constant_(m.bias, 0)
+        #     elif isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm1d):
+        #         nn.init.constant_(m.weight, 1)
+        #         nn.init.constant_(m.bias, 0)
+
+    def forward(self, imgs, masks, mask_loc):
+        feats = self.feature_extractor(imgs)
+        if self.freeze_feat:
+            feats = feats.detach()
+
+        cnn_pred = self.cnn_projector(feats)
+        if self.use_subnet == "cnn":
+            return cnn_pred
+
+        if feats.shape[1] != self.feat_num:
+            feats = self.conv1x1(feats)
+
+        for _ in range(self.feat_scale + 1):
+            masks = F.max_pool2d(masks, kernel_size=2, stride=2)
+
+        masked_feats = feats.unsqueeze(1) * masks.unsqueeze(2)
+
+        pooled_features = F.adaptive_avg_pool2d(masked_feats, (1, 1)).squeeze(-1).squeeze(-1)
+        # 将分割为mask_num组
+
+        # ============计算掩码空间关系============
+
+        batch_size, m, _ = mask_loc.size()
+
+        # 计算点之间的欧氏距离
+        # 首先扩展张量以进行广播计算
+        expanded_points1 = mask_loc.unsqueeze(2).expand(batch_size, m, m, 2)
+        expanded_points2 = mask_loc.unsqueeze(1).expand(batch_size, m, m, 2)
+
+        # 计算点之间的欧氏距离
+        A_spa = torch.norm(expanded_points1 - expanded_points2, dim=3) / imgs.shape[2]
+        A_spa = F.softmax(-A_spa, dim=2)
+        # =====================================
+        x_gcn = pooled_features
+        for i in range(len(self.GCN)):
+            x_gcn = self.GCN[i](x_gcn, A_spa)
+
+        gcn_pred = self.gcn_projector(x_gcn)
+
+        # print(f"GCN: {gcn_pred[0].detach().cpu().numpy()}, CNN: {cnn_pred[0].detach().cpu().numpy()}")
+        if self.use_subnet == "gcn":
+            pred = gcn_pred
+        elif self.use_subnet == "cnn":
+            pred = cnn_pred
+        elif self.use_subnet == "both":
+            pred = (gcn_pred + cnn_pred) / 2
+        else:
+            raise ValueError("use_subnet should be one of ['gcn', 'cnn', 'both']")
+        return pred
+
 
 class AAM_MT(nn.Module):
     """

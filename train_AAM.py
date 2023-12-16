@@ -46,7 +46,7 @@ arg.add_argument("-nw", "--num_workers", required=False, type=int, default=8, he
 arg.add_argument("-mn", "--mask_num", required=False, type=int, default=40, help="mask num")
 arg.add_argument("-fn", "--feat_num", required=False, type=int, default=1024, help="feature num")
 arg.add_argument("-sn", "--use_subnet", required=False, type=str, default="both", help="use subnet:cnn, gcn, both")
-arg.add_argument("-fs", "--feature_scale", required=False, type=int, default=3, help="which layer feature to use")
+arg.add_argument("-fs", "--feature_scale", required=False, type=int, default=4, help="which layer feature to use")
 arg.add_argument("-ff", "--freeze_feat", required=False, type=int, default=0,
                  help="whether detach the gradient from gcn to feature extractor or not")
 arg.add_argument("-gn", "--gcn_num", required=False, type=int, default=2, help="gcn layer num")
@@ -129,6 +129,10 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
                     epoch, batch_idx * len(data), len(train_loader.dataset),
                            100. * batch_idx / len(train_loader), loss.item()
                 ))
+                print(f"gcn layer1 grad{torch.mean(model.GCN[0].GCN_W.grad)},"
+                      f"layer2 grad{torch.mean(model.GCN[1].GCN_W.grad)},"
+                      f"layer3 grad{torch.mean(model.GCN[2].GCN_W.grad)},"
+                      f"gcn fc grad{torch.mean(model.gcn_projector[2].weight.grad)}")
                 if opt["use_wandb"]:
                     wandb.log({"loss": loss,
                                "epoch": epoch})
