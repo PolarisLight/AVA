@@ -292,7 +292,7 @@ class FCN3(nn.Module):
 
 
 class GraphConvLayer(nn.Module):
-    def __init__(self, dim_feature=64, bias=False, resnet=False, use_L2=True):
+    def __init__(self, dim_feature=64, bias=False, resnet=False, use_L2=True, use_BN=False):
         super(GraphConvLayer, self).__init__()
 
         self.mapping1 = nn.Linear(dim_feature, dim_feature, bias=bias)
@@ -304,6 +304,9 @@ class GraphConvLayer(nn.Module):
         self.initialize()
         self.resnet = resnet
         self.use_L2 = use_L2
+        self.use_BN = use_BN
+
+        self.bn = nn.BatchNorm1d(dim_feature)
 
     def initialize(self):
         nn.init.xavier_uniform_(self.GCN_W)
@@ -324,6 +327,10 @@ class GraphConvLayer(nn.Module):
 
         x = torch.matmul(A, x)
         x = torch.matmul(x, self.GCN_W)
+        if self.use_BN:
+            x = x.transpose(1, 2)
+            x = self.bn(x)
+            x = x.transpose(1, 2)
         # x = x + self.GCN_B
         x = self.relu(x)
 
@@ -748,7 +755,7 @@ class MyFc(nn.Module):
 
 class AAM5(nn.Module):
     def __init__(self, mask_num=30, feat_num=64, out_class=10, use_subnet="both", feat_scale=3, freeze_feat=True,
-                 gcn_layer_num=2, resnet=False, dropout=0.75, use_L2=True):
+                 gcn_layer_num=2, resnet=False, dropout=0.75, use_L2=True, use_BN=False):
         super(AAM5, self).__init__()
         self.feat_num = feat_num
         self.mask_num = mask_num
@@ -775,7 +782,7 @@ class AAM5(nn.Module):
         # changeable GCN layer nums
         self.GCN = nn.ModuleList()
         for i in range(gcn_layer_num):
-            self.GCN.append(GraphConvLayer(dim_feature=feat_num, resnet=resnet, use_L2=use_L2))
+            self.GCN.append(GraphConvLayer(dim_feature=feat_num, resnet=resnet, use_L2=use_L2, use_BN=use_BN))
 
         self.gcn_projector = nn.Sequential(
             nn.Flatten(),
@@ -823,8 +830,8 @@ class AAM5(nn.Module):
         expanded_points2 = mask_loc.unsqueeze(1).expand(batch_size, m, m, 2)
 
         # 计算点之间的欧氏距离
-        A_spa = torch.norm(expanded_points1 - expanded_points2, dim=3) / imgs.shape[2]
-        A_spa = F.softmax(-A_spa, dim=2)
+        A_spa = torch.norm(expanded_points1 - expanded_points2, dim=3)
+        A_spa = F.softmax(A_spa, dim=2)
         # =====================================
         x_gcn = pooled_features
         for i in range(len(self.GCN)):

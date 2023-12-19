@@ -53,6 +53,7 @@ arg.add_argument("-gn", "--gcn_num", required=False, type=int, default=2, help="
 arg.add_argument("-r", "--resnet", required=False, type=int, default=0, help="use resnet gcn or not")
 arg.add_argument("-sf", "--shuffle", required=False, type=int, default=0, help="shuffle mask channel or not")
 arg.add_argument("-l2", "--use_L2", required=False, type=int, default=1, help="use mask center space distance or not")
+arg.add_argument("-bn", "--use_BN", required=False, type=int, default=0, help="use bn in gcn or not")
 
 opt = vars(arg.parse_args())
 
@@ -229,7 +230,7 @@ def main():
 
     model = AAM5(mask_num=opt["mask_num"], feat_num=opt["feat_num"], use_subnet=opt["use_subnet"],
                  feat_scale=opt["feature_scale"], freeze_feat=opt['freeze_feat'], gcn_layer_num=opt['gcn_num'],
-                 resnet=opt['resnet'], use_L2=opt['use_L2'])
+                 resnet=opt['resnet'], use_L2=opt['use_L2'],use_BN=opt['use_BN'])
     model.to(device)
 
     criterion = EMD_loss()  # it can be replaced by other loss function
