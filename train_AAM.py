@@ -15,7 +15,7 @@ import tqdm
 import wandb  # wandb is a tool for visualizing the training process, please refer to https://wandb.ai/site
 
 from dataset import AVADatasetSAM, train_transform, val_transform, AVADatasetSAM_New
-from utils import EMD_loss, dis_2_score
+from utils import EMD_loss, dis_2_score,emd_loss
 from AAM import AAM3, AAM4, AAM5
 
 seed = 42
@@ -74,7 +74,7 @@ else:
     opt["use_wandb"] = 0
 
 
-def learning_rate_decay(optimizer, epoch, decay_rate=0.1, decay_epoch=5):
+def learning_rate_decay(optimizer, epoch, decay_rate=0.1, decay_epoch=3):
     """
     simple linear learning rate decay
     :param optimizer: instance of optimizer
@@ -90,7 +90,7 @@ def learning_rate_decay(optimizer, epoch, decay_rate=0.1, decay_epoch=5):
     print(f"learning rate decay to {optimizer.param_groups[0]['lr']}")
 
 
-def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
+def train(model, train_loader, val_loader, criterion_train, criterion_test, optimizer, epochs=10,
           model_saved_path=None):
     """
     training function
@@ -117,7 +117,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
                 mask_loc = datas["mask_loc"].to(device)
                 optimizer.zero_grad()
                 output = model(data, mask, mask_loc)
-                loss = criterion(output, target)
+                loss = criterion_train(output, target)
                 if not opt["use_wandb"]:
                     print()
                     print(f"0:output:{output[0].detach().cpu().numpy()}, "
@@ -130,17 +130,17 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
                     epoch, batch_idx * len(data), len(train_loader.dataset),
                            100. * batch_idx / len(train_loader), loss.item()
                 ))
-                print(f"gcn layer1 grad{torch.mean(model.GCN[0].GCN_W.grad)},"
-                      f"layer2 grad{torch.mean(model.GCN[1].GCN_W.grad)},"
-                      f"layer3 grad{torch.mean(model.GCN[2].GCN_W.grad)},"
-                      f"gcn fc grad{torch.mean(model.gcn_projector[2].weight.grad)}")
+                # print(f"gcn layer1 grad{torch.mean(model.GCN[0].GCN_W.grad)},"
+                #       f"layer2 grad{torch.mean(model.GCN[1].GCN_W.grad)},"
+                #       f"layer3 grad{torch.mean(model.GCN[2].GCN_W.grad)},"
+                #       f"gcn fc grad{torch.mean(model.gcn_projector[2].weight.grad)}")
                 if opt["use_wandb"]:
                     wandb.log({"loss": loss,
                                "epoch": epoch})
-                    wandb.log({"gcn grad": torch.mean(model.gcn_projector[2].weight.grad),
-                               "cnn grad": torch.mean(model.cnn_projector[3].weight.grad)})
+                    # wandb.log({"gcn grad": torch.mean(model.gcn_projector[2].weight.grad),
+                    #            "cnn grad": torch.mean(model.cnn_projector[3].weight.grad)})
 
-        val_loss = validate(model, val_loader, criterion)
+        val_loss = validate(model, val_loader, criterion_train, criterion_test)
 
         if model_saved_path is not None:
             if val_loss < previous_val_loss:
@@ -151,7 +151,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10,
                 print("Model not saved")
 
 
-def validate(model, val_loader, criterion):
+def validate(model, val_loader, criterion_train, criterion_test):
     """
     validation function
     :param model: model to be validated
@@ -160,7 +160,8 @@ def validate(model, val_loader, criterion):
     :return: validation loss
     """
     model.eval()
-    val_loss = []
+    val_loss_r2 = []
+    val_loss_r1 = []
     pred_list = []
     target_list = []
     pred_score_list = []
@@ -171,13 +172,15 @@ def validate(model, val_loader, criterion):
             data, target, mask = datas["image"].to(device), datas["annotations"].to(device), datas["masks"].to(device)
             mask_loc = datas["mask_loc"].to(device)
             output = model(data, mask, mask_loc)
-            val_loss.append(criterion(output, target).item())
+            val_loss_r2.append(criterion_train(output, target).item())
+            val_loss_r1.append(criterion_test(output, target).item())
             pred_list.append(output)
             target_list.append(target)
             pred_score_list += dis_2_score(output).tolist()
             target_score_list += dis_2_score(target).tolist()
 
-        val_loss = sum(val_loss) / len(val_loss)
+        val_loss_r2 = sum(val_loss_r2) / len(val_loss_r2)
+        val_loss_r1 = sum(val_loss_r1) / len(val_loss_r1)
 
         mse_loss = torch.nn.functional.mse_loss(torch.tensor(pred_score_list), torch.tensor(target_score_list)).item()
 
@@ -195,12 +198,13 @@ def validate(model, val_loader, criterion):
         acc = accuracy_score(target_label, pred_label)
 
         if opt["use_wandb"]:
-            wandb.log({"val_loss": val_loss, "val_pearson": pearson, "val_spearman": spearman,
-                       "val_acc": acc, "val_mse": mse_loss})
+            wandb.log({"val_loss": val_loss_r1, "val_pearson": pearson, "val_spearman": spearman,
+                       "val_acc": acc, "val_mse": mse_loss, "emd_r2": val_loss_r2})
 
-        print(f"val_loss:{val_loss}, val_pearson:{pearson}, val_spearman:{spearman}, val_acc:{acc}, val_mse:{mse_loss}")
+        print(
+            f"val_loss:{val_loss_r1}, val_pearson:{pearson}, val_spearman:{spearman}, val_acc:{acc}, val_mse:{mse_loss}")
 
-    return val_loss
+    return val_loss_r1
 
 
 def main():
@@ -233,7 +237,8 @@ def main():
                  resnet=opt['resnet'], use_L2=opt['use_L2'],use_BN=opt['use_BN'])
     model.to(device)
 
-    criterion = EMD_loss()  # it can be replaced by other loss function
+    criterion_r2 = emd_loss(dist_r=2)  # it can be replaced by other loss function
+    criterion_r1 = emd_loss(dist_r=1)
     optimizer = optim.Adam(model.parameters(), lr=opt["learning_rate"], betas=(0.9, 0.9))
 
     # feature_extractor_params = model.feature_extractor.parameters()
@@ -260,7 +265,7 @@ def main():
             }
         )
 
-    train(model, train_loader, val_loader, criterion, optimizer, epochs=opt["epochs"],
+    train(model, train_loader, val_loader, criterion_r2, criterion_r1, optimizer, epochs=opt["epochs"],
           model_saved_path=model_saved_path)
 
 
