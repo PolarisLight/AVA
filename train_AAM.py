@@ -239,7 +239,7 @@ def main():
 
     criterion_r2 = emd_loss(dist_r=2)  # it can be replaced by other loss function
     criterion_r1 = emd_loss(dist_r=1)
-    optimizer = optim.Adam(model.parameters(), lr=opt["learning_rate"], betas=(0.9, 0.9))
+    optimizer = optim.SGD(model.parameters(), lr=opt["learning_rate"], momentum=0.9, weight_decay=1e-3)
 
     # feature_extractor_params = model.feature_extractor.parameters()
     #

@@ -22,18 +22,23 @@ def process_file(file):
     # 将原始的masks和新计算的mask_loc保存到新的npz文件中
     np.savez_compressed(target_file_path, masks=masks, mask_loc=mask_loc_numpy)
 
+
+
+
 # 读取masks/文件夹下的所有npz文件
 source_folder = 'D:\\Dataset\\AVA\\masks\\'
 target_folder = 'D:\\Dataset\\AVA\\masks_with_loc'
 
-# 创建目标文件夹，如果它不存在
-if not os.path.exists(target_folder):
-    os.makedirs(target_folder)
+process_file('128391.npz')
 
-npz_files = [f for f in os.listdir(source_folder) if f.endswith('.npz')]
-
-# 使用ThreadPoolExecutor来处理文件
-with ThreadPoolExecutor(max_workers=32) as executor:  # 可以调整max_workers的数量
-    list(tqdm.tqdm(executor.map(process_file, npz_files), total=len(npz_files)))
-
-print("处理完成！")
+# # 创建目标文件夹，如果它不存在
+# if not os.path.exists(target_folder):
+#     os.makedirs(target_folder)
+#
+# npz_files = [f for f in os.listdir(source_folder) if f.endswith('.npz')]
+#
+# # 使用ThreadPoolExecutor来处理文件
+# with ThreadPoolExecutor(max_workers=32) as executor:  # 可以调整max_workers的数量
+#     list(tqdm.tqdm(executor.map(process_file, npz_files), total=len(npz_files)))
+#
+# print("处理完成！")
